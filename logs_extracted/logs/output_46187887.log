@@ -1,0 +1,13 @@
+Job started: Mon Mar 30 02:01:57 PM EDT 2026
+Node: p0354.ten.osc.edu
+Working dir: /users/PAS3272/suryasuresh/FinalProject
+Loaded module: python/3.10
+
+------------------------------------------------------
+Model                             Accuracy     AUC-ROC
+------------------------------------------------------
+Baseline (full-transcript)          0.4667      0.4137
+Improved (prepared + Q&A)           1.0000      1.0000
+------------------------------------------------------
+
+Job finished: Mon Mar 30 02:06:03 PM EDT 2026
