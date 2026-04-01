@@ -85,7 +85,7 @@ cd project
 # 3. Set up environment (first time only)
 bash setup.sh
 
-# 4. Edit run_job.sh — replace <YOUR_OSC_PROJECT> with your allocation ID
+# 4. Make sure run_job.sh has PAS3272 for allocation ID
 
 # 5. Submit job
 sbatch run_job.sh
