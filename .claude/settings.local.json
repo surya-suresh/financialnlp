@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/nkumar/Documents/financialnlp -type f \\\\\\(-name *.pkl -o -name *.joblib -o -name *.pth -o -name *.pt -o -name *.h5 -o -name *.csv -o -name *.json \\\\\\))",
+      "Bash(ls /Users/nkumar/Documents/financialnlp/*.pdf)",
+      "Bash(mactex)",
+      "Bash(brew list:*)",
+      "Read(//Library/**)",
+      "Read(//usr/local/**)",
+      "Bash(pip3 list:*)",
+      "Bash(brew install:*)",
+      "Bash(tectonic proposal.tex)",
+      "Bash(curl -sL \"https://raw.githubusercontent.com/acl-org/acl-style-files/master/acl.sty\" -o acl.sty)"
+    ]
+  }
+}
