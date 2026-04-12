@@ -10,7 +10,15 @@
       "Bash(pip3 list:*)",
       "Bash(brew install:*)",
       "Bash(tectonic proposal.tex)",
-      "Bash(curl -sL \"https://raw.githubusercontent.com/acl-org/acl-style-files/master/acl.sty\" -o acl.sty)"
+      "Bash(curl -sL \"https://raw.githubusercontent.com/acl-org/acl-style-files/master/acl.sty\" -o acl.sty)",
+      "Bash(pdflatex -interaction=nonstopmode proposal.tex)",
+      "Bash(mactex --version)",
+      "Read(//Users/nkumar/Library/TinyTeX/**)",
+      "Bash(ls /usr/local/texlive/*/bin/*/pdflatex)",
+      "Read(//opt/**)",
+      "Bash(pip list:*)",
+      "Bash(conda list:*)",
+      "Bash(/opt/homebrew/bin/tectonic proposal.tex)"
     ]
   }
 }

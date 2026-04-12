@@ -14,8 +14,7 @@
 \Urlmuskip=0mu plus 1mu
 \emergencystretch=3em
 
-\title{Does Financial Language Understanding Transfer to Market Prediction?\\
-A Systematic Study Across Models, Retrieval Paradigms, and Prediction Targets}
+\title{Do Language Models that Better Understand Financial Text\\Produce Better Market Signals?}
 
 \author{
 Surya Suresh \\
@@ -29,210 +28,105 @@ Nikhil Kumar \\
 \maketitle
 
 \begin{abstract}
-Earnings call transcripts and SEC filings are rich sources of financial information, yet it remains unclear whether models that better understand this language also produce more reliable market predictions. We study this question through three coordinated components. First, we compare fine-tuning strategies (single-task, multi-task, and curriculum) across three model architectures on three financial language understanding tasks. Second, we evaluate retrieval-augmented generation (RAG) as an alternative to fine-tuning, comparing sparse, dense, and hybrid retrieval and testing whether retrieval can replace or complement domain adaptation. Third, we measure predictive transfer: whether gains in language understanding carry over to stock direction, earnings surprise, and volatility prediction, and whether this holds across market periods and industry sectors. Together, these components reveal when strong financial language understanding actually leads to better predictive performance.
+It is widely assumed that a model which better understands financial text will produce more useful market signals, but this has not been tested directly. We test this by prompting the same LLM under four conditions (zero-shot, finetuned on financial tasks, retrieval-augmented, and finetuned with retrieval) to extract four structured signals from earnings call transcripts: prepared remarks sentiment, Q\&A sentiment, management uncertainty, and forward guidance direction. These signals are fed into logistic regression classifiers that predict stock direction and earnings surprise. Because the extraction prompt and classifier are identical across conditions, any prediction improvement must come from the model understanding the transcript better and producing more accurate signals. Preliminary results with a zero-shot sentiment baseline show near-chance prediction, establishing the floor that the other conditions need to beat.
 \end{abstract}
 
 \section{Introduction}
 
-Earnings call transcripts and SEC annual reports convey financial information in natural language, and market participants rely on this language to form price expectations. However, prior NLP work has largely treated financial language understanding and market prediction as separate problems. It remains unclear whether a model that better extracts and reasons over financial text actually produces better predictions downstream. Our central research question is: \textit{does improved financial language understanding reliably transfer to improved market signal quality, and if so, under what conditions?}
+Earnings call transcripts contain information that moves stock prices. NLP research has built better and better models for understanding financial text, and separate work has tried to predict market outcomes from text. But nobody has directly tested the connection: if you make a model better at understanding financial language, does it extract more useful signals for prediction?
 
-We break this into three sub-questions, each addressed by one research component. First, which fine-tuning strategies and architectures yield the strongest financial language understanding, and does multi-task training help or hurt? Second, can retrieval-augmented generation serve as a viable alternative to fine-tuning for financial QA, and how does retrieval quality affect end-to-end performance? Third, do language understanding gains transfer uniformly across prediction targets, market conditions, and document types, or are they narrow and task-specific?
+We test this with a controlled experiment. We take the same base LLM and run it under four conditions: (1) zero-shot, with no financial training; (2) finetuned on financial tasks using LoRA \citep{Hu2022}; (3) retrieval-augmented, where the model receives relevant passages at inference time; and (4) finetuned with retrieval. In every condition, the model reads an earnings call transcript and extracts four structured signals: prepared remarks sentiment, Q\&A sentiment, management uncertainty, and forward guidance direction. These four signals are fed into logistic regression classifiers that predict stock direction and earnings surprise. The extraction prompt and classifier are identical across all conditions, so if prediction improves, it is because the model understood the transcript better and produced more accurate signals. We also test whether the Q\&A section of a transcript is more predictive than the prepared remarks, and whether results hold across different market periods.
 
 \section{Related Work}
 
-Lexicon-based sentiment analysis \citep{Loughran2011} and domain-pretrained models like FinBERT \citep{Araci2019} are the dominant approaches in financial NLP. Prior work has shown that earnings call language can predict market behavior \citep{Qin2019}, but transcripts are typically treated as flat documents without structural decomposition. Numerical reasoning benchmarks such as FinQA \citep{Chen2021} and ConvFinQA \citep{Chen2022} test financial comprehension but do not link understanding to prediction. Large-scale studies like BloombergGPT \citep{Wu2023} explore financial pretraining but do not systematically compare architectures or fine-tuning strategies. RAG has been studied in open-domain settings \citep{Lewis2020}, but its effectiveness relative to fine-tuning in the financial domain, and the impact of retrieval strategy choice, remains unexplored. Multi-task learning has been studied broadly \citep{Raffel2020}, but not for the specific question of whether financial task co-training improves downstream predictive transfer.
+Financial sentiment analysis has progressed from the Loughran-McDonald dictionary \citep{Loughran2011} to domain-pretrained models like FinBERT \citep{Araci2019}. Earnings call language has been shown to predict volatility \citep{Qin2019}, but transcripts are usually treated as flat text without separating prepared remarks from the Q\&A. FinQA \citep{Chen2021} and ConvFinQA \citep{Chen2022} benchmark numerical reasoning over financial documents but do not test whether better comprehension leads to better prediction. RAG has been studied in open-domain settings \citep{Lewis2020} but not compared against finetuning for financial tasks. The gap we address is the missing link between language understanding quality and prediction quality.
 
-\section{Tasks, Data, and Evaluation}
+\section{Experiment Design}
 
-\subsection{Language Understanding Tasks}
+\subsection{Overview}
 
-We evaluate three tasks that capture different aspects of financial language comprehension.
+The experiment has two parts. First, we finetune an LLM on financial tasks and verify that finetuning actually improved its understanding by evaluating on held-out examples. Second, we prompt the LLM to extract structured signals from earnings call transcripts, feed those signals into a logistic regression classifier, and predict stock direction and earnings surprise. We repeat this under four conditions that give the model increasing levels of financial understanding. Because the prompt and classifier are the same every time, any prediction improvement comes from the model extracting better signals.
 
-\noindent\textbf{Task 1: Numerical extraction.} The model identifies structured financial values (revenue, EPS, guidance figures) and their attributes from transcript text. We evaluate with precision, recall, and F1 against manually verified annotations, distinguishing exact matches from partial credit to capture near-miss errors.
+\subsection{The Four Conditions}
 
-\noindent\textbf{Task 2: Evidence-grounded QA.} The model answers factual financial questions and cites the specific transcript spans supporting its answer. We measure answer accuracy, citation exact match, citation partial match, and hallucinated number rate. The hallucination metric checks whether numerical values in generated answers actually appear in the source document.
+We run four conditions on the same base instruction-tuned LLM (7B parameters). In the \textit{zero-shot} condition, the model is used as-is with no financial training and no retrieval. This is the baseline.
 
-\noindent\textbf{Task 3: Financial sentiment classification.} The model assigns positive, negative, or neutral sentiment to financial statements. This is a standard benchmark that enables comparison with established baselines. We evaluate with macro-averaged F1.
+In the \textit{finetuned} condition, the model is trained on three financial tasks using LoRA \citep{Hu2022}: sentiment classification on Financial PhraseBank \citep{Malo2014}, numerical extraction of values like revenue and EPS from transcript text, and evidence-grounded QA where the model answers questions about transcripts and cites supporting spans. Training on these tasks should deepen the model's understanding of financial language, which should make it better at extracting signals from new transcripts.
 
-\subsection{Downstream Prediction Tasks}
+In the \textit{retrieval-augmented} condition, the model is not finetuned but receives relevant transcript passages at inference time, retrieved using BM25 or dense retrieval with sentence-transformer embeddings \citep{Reimers2019} indexed in FAISS. This tests whether giving the model the right context at inference time is as effective as training it.
 
-We test predictive transfer on three targets derived from market data. \textbf{Stock direction} predicts whether a company's stock closes up or down in the trading window after an earnings call. \textbf{Earnings surprise direction} predicts whether reported EPS beats, meets, or misses analyst consensus, testing whether transcript signals capture firm-specific news beyond general market sentiment. \textbf{Post-call volatility} predicts whether realized return volatility in the five days after a call falls in the top quartile, testing whether model uncertainty signals reflect genuine investor uncertainty rather than just directional bias.
+In the \textit{finetuned + retrieval} condition, the model gets both. This tests whether the two approaches are complementary.
 
-All targets are treated as classification problems. For each, we train a logistic regression classifier on signals derived from model outputs (sentiment scores, extracted guidance values, uncertainty markers, and QA-derived features). By holding the classifier constant across all language model conditions, we ensure that any differences in prediction quality are attributable to the language model, not the prediction architecture.
+\subsection{Evaluating Understanding}
 
-\subsection{Datasets}
+Before testing prediction, we first verify that finetuning actually improved the model's understanding of financial text. We evaluate the zero-shot and finetuned models on held-out examples from each finetuning task: sentiment classification (macro F1), numerical extraction (F1), and QA (answer accuracy and hallucination rate). If the finetuned model does not score meaningfully higher than zero-shot on these tasks, then finetuning did not improve understanding and we would not expect better prediction. If it does score higher, we can then ask the key question: does that improvement carry over to prediction? This two-step evaluation (first understanding, then prediction) is what lets us draw a clear connection between the two.
 
-The \textbf{lamini/\allowbreak earnings-calls-qa} corpus (${\sim}$860{,}000 transcript QA pairs) provides training data for Tasks 1 and 2. The \textbf{Bose345/\allowbreak sp500\_earnings\_transcripts} corpus provides transcripts for prediction experiments, covering tens of thousands of calls across S\&P 500 firms from 2010 to 2024. \textbf{Financial PhraseBank} \citep{Malo2014} provides 4{,}840 annotated financial sentences for Task 3. \textbf{FinanceBench} \citep{Islam2023} provides QA pairs over 10-K, 10-Q, and 8-K filings and serves as our cross-domain evaluation benchmark. \textbf{FinQA} \citep{Chen2021} and \textbf{ConvFinQA} \citep{Chen2022} provide additional numerical reasoning evaluation. Stock direction and volatility labels come from historical prices via \texttt{yfinance}; earnings surprise labels come from analyst EPS consensus estimates via \texttt{yahooquery}. All splits are chronological to prevent data leakage.
+\subsection{Signal Extraction}
 
-\subsection{Baselines}
-
-We compare against four baselines of increasing sophistication: (1) majority class prediction; (2) Loughran-McDonald financial sentiment dictionary \citep{Loughran2011} applied to full transcript text; (3) zero-shot FinBERT; and (4) a base instruction-tuned LLM with no fine-tuning or retrieval. All baselines are evaluated identically to the fine-tuned conditions across all three prediction targets.
-
-\section{Component A: Fine-Tuning Strategies and Architecture Comparison}
-
-\subsection{Model Families}
-
-We evaluate three architecture families to test whether fine-tuning benefits are architecture-specific or general.
-
-\noindent\textbf{Encoder-only:} \texttt{ProsusAI/finbert} \citep{Araci2019}, a BERT-based model pretrained on financial text. We fine-tune it with task-specific classification and span extraction heads. This represents strong domain pretraining with a discriminative architecture.
-
-\noindent\textbf{Encoder-decoder:} \texttt{google/flan-t5-base} \citep{Chung2022}, fine-tuned with task-prefixed inputs. This lets us directly evaluate a generative seq2seq model on extraction and QA without the mismatch that comes from prompting alone.
-
-\noindent\textbf{Decoder-only:} A publicly available instruction-tuned LLM (7B parameters), fine-tuned with LoRA \citep{Hu2022} at rank $r \in \{4, 16, 64\}$. We also evaluate the base model with prompting only to isolate the effect of fine-tuning.
-
-\subsection{Fine-Tuning Regimes}
-
-For each architecture, we compare three training regimes:
-
-\noindent\textbf{Single-task fine-tuning.} Each model is trained separately on each task, providing per-task baselines and an upper bound for task-specific optimization.
-
-\noindent\textbf{Joint multi-task fine-tuning.} All three tasks are trained simultaneously with uniform or temperature-scaled sampling. This tests whether the tasks benefit from shared representations.
-
-\noindent\textbf{Curriculum fine-tuning.} Tasks are introduced in a fixed order, building from simpler (sentiment) to more complex (QA). We test two orderings: sentiment $\rightarrow$ extraction $\rightarrow$ QA and extraction $\rightarrow$ sentiment $\rightarrow$ QA.
-
-\subsection{Ablation Studies}
-
-For the decoder-only model, we ablate LoRA rank ($r \in \{4, 16, 64\}$), training data size (10\%, 25\%, 50\%, 100\%), and task ordering in curriculum fine-tuning. For the encoder-only model, we ablate layer freezing (bottom $k \in \{0, 6, 9\}$ transformer blocks). These ablations document how sensitive financial fine-tuning is to common engineering choices.
-
-\subsection{Cross-Document-Domain Transfer}
-
-All fine-tuned models are evaluated zero-shot on FinanceBench, which contains QA over SEC filings not seen during training. This tests whether understanding learned from earnings transcripts generalizes to regulatory filings. We also fine-tune on a 50/50 mixed corpus of transcripts and SEC filings and compare cross-domain performance before and after mixed training.
-
-\section{Component B: Retrieval-Augmented Generation for Financial QA}
-
-\subsection{Motivation}
-
-Fine-tuning bakes domain knowledge into model weights, which become static after training. RAG instead stores knowledge in an external index that can be updated without retraining. For financial applications, where facts change every quarter and documents are long, RAG may be more practical. This component tests whether retrieval can replace or complement fine-tuning on the QA task.
-
-\subsection{Retrieval Strategies}
-
-We compare three retrieval approaches:
-
-\noindent\textbf{Sparse retrieval (BM25).} Classical bag-of-words retrieval over transcript passages. This is a strong lexical baseline, especially for numerical entities that have little paraphrase variation.
-
-\noindent\textbf{Dense retrieval.} Passages are embedded with \texttt{sentence-transformers/\allowbreak all-\allowbreak MiniLM-L6-v2} \citep{Reimers2019} and indexed with FAISS. At inference, queries are embedded and the top-$k$ passages are retrieved by cosine similarity.
-
-\noindent\textbf{Hybrid retrieval.} BM25 and dense scores are combined via linear interpolation with weight $\alpha$, tuned over $\alpha \in \{0.2, 0.4, 0.6, 0.8\}$ on a development set.
-
-For all strategies, we measure top-$k$ retrieval recall at $k \in \{1, 3, 5, 10\}$ against gold supporting spans. Retrieved passages are prepended as context for the reader model.
-
-\subsection{Reader Models and RAG Conditions}
-
-We evaluate four conditions on the QA task:
+In every condition, we prompt the model with the same instruction: read the transcript and output a fixed set of structured signals. The signals are:
 
 \begin{enumerate}[nosep]
-    \item Base LLM, no retrieval, no fine-tuning (zero-shot prompting only)
-    \item Base LLM with the best retrieval strategy (RAG only)
-    \item Fine-tuned LLM, no retrieval (fine-tuning only)
-    \item Fine-tuned LLM with the best retrieval strategy (RAG + fine-tuning)
+\item Sentiment of the prepared remarks section (a score from $-1$ to $+1$)
+\item Sentiment of the analyst Q\&A section (a score from $-1$ to $+1$)
+\item Management uncertainty level (a score from $0$ to $1$, capturing hedging and cautious language)
+\item Forward guidance direction (positive, negative, or neutral, indicating whether the company is guiding higher or lower than prior periods)
 \end{enumerate}
 
-This 2$\times$2 design isolates the contributions of retrieval and fine-tuning and reveals whether they are additive, redundant, or complementary.
+All four signals require the model to understand what is being said in the transcript. A finetuned model should produce more accurate values than a zero-shot model. A model with retrieved context should have more information to work with. The prompt is identical across conditions, so any difference in signal quality comes from the model's understanding.
 
-\subsection{Retrieval Failure Analysis}
+\subsection{Prediction}
 
-When the system produces an incorrect answer, we classify the failure as either (1) \textit{retrieval failure}, where the correct passage was not retrieved, or (2) \textit{reader failure}, where the correct passage was retrieved but the model still answered incorrectly. This tells us whether improvement efforts should focus on retrieval or comprehension. We report the breakdown by question type (numerical, factual, guidance-related) and document section.
+The four extracted signals are fed into a logistic regression classifier to predict two things: (1) whether the stock goes up or down in the three trading days after the earnings call, and (2) whether reported EPS beats or misses analyst expectations. The classifier is the same across all conditions: same inputs, same structure. We measure prediction quality with AUC-ROC and balanced accuracy, using bootstrap confidence intervals and permutation tests for significance. The final result is a table with one row per condition showing AUC for each target. If AUC goes up from zero-shot to finetuned, then better understanding produces better predictions.
 
-\subsection{Long-Document Retrieval}
+\subsection{Section Comparison}
 
-Earnings transcripts can exceed 10{,}000 tokens. We study how passage chunking granularity (sentence-level, 128-token, 256-token, 512-token windows) affects retrieval recall and end-to-end QA accuracy, providing practical guidance for applying RAG to long financial documents.
-
-\section{Component C: Predictive Transfer and Robustness Evaluation}
-
-\subsection{Feature Extraction and Signal Construction}
-
-From each model condition in Components A and B, we extract a fixed set of signals from transcripts: (1) overall and section-level sentiment scores (prepared remarks and analyst Q\&A scored separately); (2) numerical guidance signals (extracted revenue/EPS guidance values and year-over-year direction); (3) uncertainty markers (hedging language frequency and modal verb counts from QA and extraction outputs); and (4) QA-derived confidence signals (answer length, citation coverage, and hallucination rate as a proxy for model uncertainty). These features are constructed identically across all conditions so that prediction differences reflect language understanding quality, not feature engineering.
-
-\subsection{Prediction Models and Evaluation}
-
-For each prediction target (stock direction, earnings surprise, volatility), we train logistic regression classifiers on the extracted signals and evaluate with AUC-ROC, accuracy, balanced accuracy, and expected calibration error. We compute confidence intervals via bootstrap resampling ($n = 1{,}000$) and test for significant AUC improvements using paired permutation tests.
-
-To put our results in context, we compare against prior reported AUC values for earnings call prediction \citep{Qin2019}. We also compare predictions from Q\&A sections alone versus prepared remarks alone, testing whether spontaneous analyst dialogue carries more predictive signal than scripted management statements.
+We also test whether the Q\&A section is more predictive than the prepared remarks. We do this by running prediction using only the Q\&A sentiment signal versus only the prepared remarks sentiment signal. Prior work suggests that the unscripted Q\&A contains more candid language than the scripted remarks \citep{Qin2019}, and this test checks whether that translates to better prediction.
 
 \subsection{Temporal Robustness}
 
-We partition the test data into three market-period buckets: pre-COVID (2015--2019), COVID (2020--2021), and post-COVID (2022--2024), training only on data preceding each evaluation period. We evaluate all model conditions on each bucket and plot performance over time to identify degradation patterns. We also analyze vocabulary shift, identifying financial terminology that emerges in later periods (e.g., pandemic-era hedging language, supply chain terms), and test whether models trained on earlier data handle novel vocabulary.
+We want to make sure our results are not specific to one market period. To test this, we evaluate prediction on three separate eras: pre-COVID (2015--2019), COVID (2020--2021), and post-COVID (2022--2024), training the classifier only on transcripts from before each era. If finetuned models outperform zero-shot in calm markets but not in volatile ones (or vice versa), that tells us how robust the transfer from understanding to prediction really is.
 
-\subsection{Sector-Stratified and Firm-Size Stratified Analysis}
+\section{Data}
 
-We stratify prediction results by GICS sector (technology, healthcare, financials, industrials, and others) and by market capitalization (large cap vs.\ mid cap). This tests whether language understanding gains are concentrated in certain firm types; for instance, whether fine-tuning helps more for sectors with specialized language (healthcare regulatory terminology, technology forward guidance) than for sectors with more standardized reporting.
+We use three datasets. For finetuning on number extraction and QA, we use \texttt{lamini/\allowbreak earnings-calls-qa}, which contains approximately 860,000 QA pairs over earnings transcripts. For finetuning on sentiment, we use Financial PhraseBank \citep{Malo2014}, which contains 4,840 labeled financial sentences. For prediction experiments, we use \texttt{Bose345/\allowbreak sp500\_earnings\_transcripts}, which contains tens of thousands of earnings calls from 2010--2024. Stock direction labels come from \texttt{yfinance} and earnings surprise labels from \texttt{yahooquery}. All prediction splits are chronological to prevent data leakage.
 
-\subsection{Structured Error Analysis}
-
-We categorize errors across all tasks and prediction targets. For extraction: wrong number, wrong entity, hallucinated value, or missed mention. For QA: wrong span, unsupported citation, hallucination, or correct answer with wrong citation. For prediction: errors are broken down by target, sector, market cap tier, and model condition. Comparing error profiles across architectures and training regimes reveals whether different design choices lead to systematically different failure modes.
+We also compare against two simple baselines that use no LLM. Majority class prediction ignores the transcript entirely and always predicts whichever label is most common in the training data. This is the floor that any useful system should beat. The Loughran-McDonald baseline \citep{Loughran2011} counts known positive and negative financial words in the transcript and feeds that single score into a logistic regression classifier. If an LLM cannot beat simple word counting, then the model's ``understanding'' is not adding value. We also include zero-shot FinBERT \citep{Araci2019}, a sentiment classifier pretrained on financial text, as an additional baseline.
 
 \section{Work Plan}
 
-\paragraph{Component A: Architecture and Fine-Tuning.}
-Covers the full data pipeline (transcript preprocessing, section segmentation, SEC filing extraction from FinanceBench, training example construction, and chronological splits), fine-tuning of all three model families across all tasks and training regimes, LoRA rank and layer-freezing ablations, and cross-document-domain transfer experiments.
-
-\paragraph{Component B: Retrieval-Augmented Generation.}
-Covers the RAG pipeline (passage chunking, BM25 indexing via \texttt{rank\_bm25}, dense indexing via FAISS and \texttt{sentence-transformers}, and hybrid retrieval with interpolation), evaluation of all retrieval conditions on the QA task, retrieval failure analysis, and the chunking granularity ablation.
-
-\paragraph{Component C: Prediction and Robustness.}
-Covers the signal extraction pipeline and logistic regression classifiers for all three prediction targets, bootstrap confidence intervals and permutation tests, temporal robustness evaluation, sector- and firm-size-stratified analysis, and the structured error analysis pipeline.
-
-\paragraph{Integration and shared milestones.}
-All team members contribute to a unified evaluation framework connecting Components A and B to Component C. The project proceeds in three overlapping phases: first, data pipeline setup, shared infrastructure, and baseline implementations; second, primary experiments for all three components in parallel; and third, targeted ablations, cross-component analysis, error analysis, and writing.
+The project has three phases. In the first phase, we build the data pipeline: load and clean transcripts, split them into prepared remarks and Q\&A sections, compute stock direction and earnings surprise labels, and create chronological train/test splits. In the second phase, we finetune the LLM on all three tasks using LoRA, evaluate the finetuned model on held-out examples from each task to verify understanding improved, and build the retrieval index for the RAG conditions. In the third phase, we run all four conditions, extract signals, predict stock direction and earnings surprise, run the section comparison and temporal robustness checks, and write up findings.
 
 \section{Progress Report}
 
-\subsection{Infrastructure and Data Pipeline}
+\subsection{What We Have Built So Far}
 
-Since the proposal, we have built and validated the full end-to-end pipeline for Component C. The code is organized as a Python package under \texttt{src/}, with separate modules for data loading, text preprocessing, feature extraction, classification, and evaluation. All experiments run on the Ohio Supercomputer Center (OSC) Pitzer cluster via a GPU-enabled Slurm job script. The environment is fully reproducible with pinned dependencies: PyTorch 2.3.1 (CUDA 11.8 for V100/sm\_70 compatibility), Transformers 4.44.2, and supporting libraries.
+We have completed the data pipeline and initial prediction infrastructure. The code is organized as a Python package under \texttt{src/} and runs on the OSC Pitzer cluster with V100 GPUs via Slurm (PyTorch 2.3.1, CUDA 11.8, Transformers 4.44.2). The pipeline loads transcripts from Bose345/sp500\_earnings\_transcripts, splits them into prepared remarks and Q\&A sections using regex patterns, and computes stock direction labels from closing prices via \texttt{yfinance}. From 500 recent transcripts, 493 yielded valid labels after excluding delisted tickers, split chronologically into 394 train and 99 test examples. The labels are imbalanced (309 up vs.\ 184 down) because S\&P 500 stocks tend to go up over time. We will address this by expanding the sampling window.
 
-The data pipeline loads transcripts from the \textbf{Bose345/sp500\_earnings\_transcripts} corpus and fetches stock price labels via \texttt{yfinance}, computing a binary direction label from closing price movement over the three trading days after each call. From the 500 most recent records, 493 yielded valid labels after excluding delisted or renamed tickers (PARA, BF.B, MMC, DFS, FI, IPG). Using a strict chronological split with no shuffling, we obtain 394 training and 99 test examples. The labels are moderately imbalanced: 309 positive (price up) vs.\ 184 negative (price down), reflecting the general upward drift of S\&P 500 constituents over the sampling window.
+\subsection{Preliminary Results}
 
-The preprocessing module uses a regex-based section splitter that detects Q\&A boundaries via patterns like \textit{``question-and-answer session''} and \textit{``open the floor to questions''}, dividing each transcript into a prepared remarks segment and a Q\&A segment. This segmentation is central to the improved feature condition described below.
-
-\subsection{Preliminary Baseline Results}
-
-We have run the first two experimental conditions from Component C: a \textbf{baseline} using full-transcript FinBERT sentiment and an \textbf{improved} condition using section-separated sentiment scores. Both use a logistic regression classifier with balanced class weights, and all hyperparameters are held constant across conditions.
-
-\noindent\textbf{Baseline condition.} A single sentiment score is computed over the full transcript using \texttt{ProsusAI/finbert} \citep{Araci2019}. Transcripts are chunked into 150-word windows to fit within the 512-token limit, and the score is defined as $P(\text{positive}) - P(\text{negative})$.
-
-\noindent\textbf{Improved condition.} Three sentiment scores are computed separately from (1) the full transcript, (2) the prepared remarks segment, and (3) the analyst Q\&A segment. This three-dimensional feature vector tests whether breaking the transcript into sections provides information that the aggregate score misses.
-
-Results on the 99-example held-out set are shown in Table~\ref{tab:preliminary}.
+As an initial baseline, we tested FinBERT \citep{Araci2019}, a sentiment classifier pretrained on financial text, on stock direction prediction. It scores each transcript's sentiment as $P(\text{positive}) - P(\text{negative})$, chunking into 150-word windows. We tested two variants: one score over the full transcript, and separate scores for prepared remarks and Q\&A.
 
 \begin{table}[t]
 \centering
 \small
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}lcc@{}}
+\begin{tabular}{@{}lc@{}}
 \toprule
-\textbf{Model} & \textbf{Accuracy} & \textbf{AUC-ROC} \\
+\textbf{Condition} & \textbf{AUC-ROC} \\
 \midrule
-Majority class & 0.6263 & 0.5000 \\
-Baseline (full transcript) & 0.5152 & 0.4883 \\
-Improved (prepared + Q\&A) & 0.5152 & 0.5122 \\
+Majority class & 0.500 \\
+FinBERT zero-shot & 0.488 \\
+FinBERT zero-shot (section-split) & 0.512 \\
 \bottomrule
 \end{tabular}
-\caption{Preliminary results on 99 held-out test examples. Majority class accuracy reflects the label imbalance (62.6\% positive). AUC-ROC is the primary metric; accuracy is reported with balanced class weights.}
+\caption{Baseline stock direction AUC on 99 held-out examples using FinBERT sentiment. Near-chance AUC confirms that a simple sentiment baseline is not predictive. Earnings surprise prediction is not yet implemented.}
 \label{tab:preliminary}
 \end{table}
 
-\subsection{Analysis of Preliminary Results}
+Both variants produce near-chance AUC (0.49 and 0.51). This is expected. FinBERT produces only a generic sentiment score, which is a much weaker signal than the four structured signals our LLM will extract (prepared remarks sentiment, Q\&A sentiment, uncertainty, guidance direction). Management prepared remarks also tend to be positive regardless of actual performance \citep{Qin2019}, so aggregate sentiment is uninformative. The section-split variant shows a small gain, consistent with Q\&A containing more candid language. These baselines establish the floor. The core experiment tests whether an LLM, especially a finetuned one, extracts richer signals that lead to meaningfully better prediction.
 
-Three observations stand out from these initial results.
+\subsection{What Remains}
 
-First, the baseline AUC of 0.4883 is essentially at chance, confirming that aggregate sentiment over a full transcript provides no useful directional signal. This aligns with prior findings that management language in prepared remarks tends to be consistently positive regardless of actual performance \citep{Qin2019}, suggesting that treating the transcript as a single undifferentiated block conflates qualitatively different sources of language.
-
-Second, the improved condition yields AUC 0.5122, a modest $+0.0239$ gain over the baseline. While small in absolute terms, this is directionally consistent with the hypothesis that section-level disaggregation recovers signal masked by the aggregate score. We also observed a notable timing asymmetry: prepared remarks sentiment was computed in under one minute for 394 examples, while full-transcript and Q\&A inference each took roughly 22 minutes on a V100 GPU. This reflects the fact that many transcripts have short or empty prepared remarks segments under the current regex splitter, an issue we plan to address next.
-
-Third, the label imbalance (${\approx}$62\%/38\%) is significant. The majority class baseline achieves 62.6\% accuracy simply by predicting all positives, outperforming both model conditions. This reflects the upward bias inherent in sampling recent S\&P 500 calls. We will address this by expanding the sampling window to include earlier, more varied market periods, consistent with the temporal robustness analysis planned in Component C.
-
-\subsection{Revised Plan for Remaining Work}
-
-These preliminary experiments have validated the core infrastructure and pointed to four concrete next steps.
-
-\noindent\textbf{Improving section segmentation.} The current regex splitter works well when transcripts use standard transition phrases, but roughly 40\% of transcripts yield an empty prepared remarks segment, adding no differential signal. We will add more detection patterns and fall back to a heuristic positional split (first 60\% as prepared remarks) when no explicit marker is found.
-
-\noindent\textbf{Expanding the feature set.} So far we use only sentiment scores. Next, we will add the guidance and uncertainty features described in the proposal: extracted EPS and revenue guidance direction (year-over-year sign), modal verb density as a hedging proxy, and forward-looking statement frequency. These can all be computed from the existing pipeline without fine-tuned models.
-
-\noindent\textbf{Connecting Components A and B to C.} The current results establish a lower bound using zero-shot FinBERT. The key question is whether fine-tuning (Component A) or retrieval augmentation (Component B) improves these signals. Our first step will be single-task fine-tuning of FinBERT on Financial PhraseBank, replacing the zero-shot scores with fine-tuned probabilities and measuring the resulting AUC change. This directly tests whether better language understanding leads to better predictions, which is the core question of the project.
-
-\noindent\textbf{Temporal stratification.} The current 80/20 chronological split is not yet broken down by market period. We will implement pre-COVID, COVID, and post-COVID evaluation buckets as described in Section~6.3, using the full 33{,}362-transcript corpus instead of the 500-record sample. The larger corpus also helps reduce label imbalance by including periods with more varied return distributions.
+We have three weeks of work left. In the first week, we finetune the LLM on all three financial tasks using LoRA, evaluate finetuning on held-out examples, and build the earnings surprise prediction target. In the second week, we design the signal extraction prompt, build the retrieval index, run all four conditions, and predict stock direction and earnings surprise. In the third week, we run the section comparison and temporal robustness checks, analyze errors, and write the final report.
 
 \section*{References}
 \begingroup
@@ -254,20 +148,10 @@ Zhuang Chen et al. 2022.
 ConvFinQA: Exploring the Chain of Numerical Reasoning in Conversational Finance Question Answering.
 In \textit{EMNLP}, pages 6279--6292.
 
-\bibitem[Chung et al.(2022)]{Chung2022}
-Hyung Won Chung et al. 2022.
-Scaling Instruction-Finetuned Language Models.
-\textit{arXiv preprint arXiv:2210.11416}.
-
 \bibitem[Hu et al.(2022)]{Hu2022}
 Edward Hu et al. 2022.
 LoRA: Low-Rank Adaptation of Large Language Models.
 In \textit{ICLR}.
-
-\bibitem[Islam et al.(2023)]{Islam2023}
-Zain Ul Islam Fazal et al. 2023.
-FinanceBench: A New Benchmark for Financial Question Answering.
-\textit{arXiv preprint arXiv:2311.11944}.
 
 \bibitem[Lewis et al.(2020)]{Lewis2020}
 Patrick Lewis et al. 2020.
@@ -289,20 +173,10 @@ Yao Qin and Yi Yang. 2019.
 What You Say and How You Say It Matters: Predicting Stock Volatility Using Verbal and Vocal Cues.
 In \textit{ACL}, pages 390--401.
 
-\bibitem[Raffel et al.(2020)]{Raffel2020}
-Colin Raffel et al. 2020.
-Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer.
-\textit{Journal of Machine Learning Research}, 21(140):1--67.
-
 \bibitem[Reimers and Gurevych(2019)]{Reimers2019}
 Nils Reimers and Iryna Gurevych. 2019.
 Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks.
 In \textit{EMNLP}, pages 3982--3992.
-
-\bibitem[Wu et al.(2023)]{Wu2023}
-Shijie Wu et al. 2023.
-BloombergGPT: A Large Language Model for Finance.
-\textit{arXiv preprint arXiv:2303.17564}.
 
 \end{thebibliography}
 \endgroup
