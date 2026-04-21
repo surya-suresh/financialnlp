@@ -62,8 +62,8 @@ def main():
         from data.loader import _make_synthetic_data
         import numpy as np
         df = _make_synthetic_data(args.max_samples or 200)
-        df["price_change"] = np.where(df["label"] == 1, 0.02, -0.02)
-        df = df[["ticker", "date", "text", "label", "price_change"]]
+        df = df.rename(columns={"label": "label_direction"})
+        df["price_change_pct"] = np.where(df["label_direction"] == 1, 0.02, -0.02)
         logger.info("Synthetic dataset: %d records", len(df))
     else:
         df = load_dataset(
@@ -76,8 +76,8 @@ def main():
         logger.error("Dataset is empty — aborting.")
         sys.exit(1)
 
-    logger.info("Dataset: %d records  |  labels: %s",
-                len(df), df["label"].value_counts().to_dict())
+    logger.info("Dataset: %d records  |  direction labels: %s",
+                len(df), df["label_direction"].value_counts().to_dict())
 
     # ------------------------------------------------------------------
     # 2. Chronological split
@@ -94,8 +94,8 @@ def main():
         logger.warning("Test set is very small (%d samples) — "
                        "metrics may be unreliable.", len(test_df))
 
-    y_train = train_df["label"].values
-    y_test  = test_df["label"].values
+    y_train = train_df["label_direction"].values
+    y_test  = test_df["label_direction"].values
 
     # ------------------------------------------------------------------
     # 3 & 4. Feature extraction
