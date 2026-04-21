@@ -10,20 +10,8 @@ echo "=================================================="
 
 # Load Python module if on OSC (safe no-op elsewhere)
 if command -v module &>/dev/null; then
-    echo "Detected HPC module system — finding available Python …"
-    # Try common OSC Pitzer module names in order of preference
-    LOADED=0
-    for MOD in python/3.11.4 python/3.10.8 python/3.9.12 python/3.9 python/3.10 python/3.11; do
-        if module load "$MOD" 2>/dev/null; then
-            echo "Loaded module: $MOD"
-            LOADED=1
-            break
-        fi
-    done
-    if [ "$LOADED" -eq 0 ]; then
-        echo "No versioned python module found — trying 'python' …"
-        module load python 2>/dev/null || echo "Module load skipped; using system Python."
-    fi
+    echo "Loading python/3.12 …"
+    module load python/3.12
 fi
 
 # Create venv if it doesn't already exist
