@@ -62,6 +62,57 @@ def _fetch_price_change(ticker: str, call_date: pd.Timestamp,
 
 
 # ---------------------------------------------------------------------------
+# EPS surprise utilities
+# ---------------------------------------------------------------------------
+
+def _fetch_eps_surprise(ticker: str, call_date: pd.Timestamp,
+                        window_days: int = 10, limit: int = 60) -> dict:
+    """
+    Return a dict with keys reported_eps, consensus_eps, label_eps_surprise
+    (1=beat, 0=miss) matched to the earnings call closest to call_date.
+
+    Uses yfinance.Ticker.earnings_dates whose index IS the earnings call date,
+    so a tight window_days=10 is sufficient.  Returns a dict of Nones on failure.
+    """
+    empty = {"reported_eps": None, "consensus_eps": None, "label_eps_surprise": None}
+    try:
+        import yfinance as yf
+        ed = yf.Ticker(ticker).get_earnings_dates(limit=limit)
+
+        if ed is None or ed.empty:
+            return empty
+
+        # Drop future rows (Reported EPS is NaN until the call happens)
+        ed = ed.dropna(subset=["Reported EPS", "EPS Estimate"])
+        if ed.empty:
+            return empty
+
+        # Normalise index to UTC for comparison
+        idx = pd.DatetimeIndex(ed.index).tz_convert("UTC")
+        call_ts = pd.Timestamp(call_date).tz_localize("UTC") if call_date.tzinfo is None \
+                  else pd.Timestamp(call_date).tz_convert("UTC")
+
+        diffs = pd.Series(idx - call_ts).abs()
+        min_pos = diffs.argmin()
+
+        if diffs[min_pos] > pd.Timedelta(days=window_days):
+            return empty
+
+        row      = ed.iloc[min_pos]
+        actual   = float(row["Reported EPS"])
+        estimate = float(row["EPS Estimate"])
+
+        return {
+            "reported_eps":       actual,
+            "consensus_eps":      estimate,
+            "label_eps_surprise": int(actual >= estimate),
+        }
+    except Exception as e:
+        logger.debug("yfinance EPS error for %s on %s: %s", ticker, call_date, e)
+        return empty
+
+
+# ---------------------------------------------------------------------------
 # Dataset loaders
 # ---------------------------------------------------------------------------
 
@@ -237,8 +288,25 @@ def _make_synthetic_data(n: int = 200) -> pd.DataFrame:
             base_label = 1 - base_label
         label = base_label
 
-        rows.append({"ticker": ticker, "date": date, "text": text,
-                     "label": label, "_synthetic": True})
+        # Synthetic EPS surprise: weakly correlated with Q&A sentiment,
+        # independent of price direction to reflect real-world noise.
+        eps_beat = 1 if qa_sent == "pos" else 0
+        if np.random.random() < 0.30:   # 30% flip for realism
+            eps_beat = 1 - eps_beat
+        reported_eps  = round(np.random.uniform(0.5, 3.0), 2)
+        consensus_eps = round(reported_eps + (0.05 if eps_beat else -0.05)
+                              + np.random.uniform(-0.02, 0.02), 2)
+
+        rows.append({
+            "ticker": ticker,
+            "date":   date,
+            "text":   text,
+            "label":              label,
+            "label_eps_surprise": eps_beat,
+            "reported_eps":       reported_eps,
+            "consensus_eps":      consensus_eps,
+            "_synthetic": True,
+        })
 
     return pd.DataFrame(rows)
 
@@ -279,25 +347,51 @@ def load_dataset(max_samples: int = 500,
         df = _make_synthetic_data(max_samples or 200)
         synthetic = True
 
-    if synthetic and "_synthetic" in df.columns:
-        # Labels already baked in; no yfinance needed
-        df["price_change"] = np.where(df["label"] == 1, 0.02, -0.02)
-        return df[["ticker", "date", "text", "label", "price_change"]]
+    _FINAL_COLS = [
+        "ticker", "date", "text",
+        "label_direction", "price_change_pct",
+        "label_eps_surprise", "reported_eps", "consensus_eps",
+    ]
 
-    # Fetch real stock-price labels
+    if synthetic and "_synthetic" in df.columns:
+        # Labels already baked in; no network calls needed.
+        df = df.rename(columns={"label": "label_direction"})
+        df["price_change_pct"] = np.where(df["label_direction"] == 1, 0.02, -0.02)
+        return df[_FINAL_COLS].reset_index(drop=True)
+
+    # ------------------------------------------------------------------
+    # Fetch real stock-price labels (yfinance)
+    # ------------------------------------------------------------------
     logger.info("Fetching stock-price labels via yfinance …")
     price_changes = []
     for _, row in df.iterrows():
         pc = _fetch_price_change(row["ticker"], row["date"], price_window)
         price_changes.append(pc)
 
-    df["price_change"] = price_changes
-    df = df.dropna(subset=["price_change"])
-    df["label"] = (df["price_change"] > 0).astype(int)
+    df["price_change_pct"] = price_changes
+    df = df.dropna(subset=["price_change_pct"])
+    df["label_direction"] = (df["price_change_pct"] > 0).astype(int)
 
-    logger.info("Final dataset: %d records, label distribution: %s",
-                len(df), df["label"].value_counts().to_dict())
-    return df[["ticker", "date", "text", "label", "price_change"]].reset_index(drop=True)
+    # ------------------------------------------------------------------
+    # Fetch EPS surprise labels (yahooquery)
+    # ------------------------------------------------------------------
+    logger.info("Fetching EPS surprise labels via yahooquery …")
+    eps_rows = []
+    for i, row in enumerate(df.itertuples(), 1):
+        if i % 50 == 0:
+            logger.info("  EPS progress: %d / %d", i, len(df))
+        eps_rows.append(_fetch_eps_surprise(row.ticker, row.date))
+
+    eps_df = pd.DataFrame(eps_rows, index=df.index)
+    df = pd.concat([df, eps_df], axis=1)
+
+    logger.info(
+        "Final dataset: %d records | direction labels: %s | eps labels: %s",
+        len(df),
+        df["label_direction"].value_counts().to_dict(),
+        df["label_eps_surprise"].dropna().astype(int).value_counts().to_dict(),
+    )
+    return df[_FINAL_COLS].reset_index(drop=True)
 
 
 def chronological_split(df: pd.DataFrame,
