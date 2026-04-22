@@ -1,0 +1,6 @@
+Job ID: 47032251
+Task:   surprise   Mode: base
+Pairs:  data/pairs_eps_surprise.jsonl
+GPU:    Tesla V100-PCIE-16GB
+Start:  Wed Apr 22 05:38:47 EDT 2026
+End:    Wed Apr 22 05:40:23 EDT 2026

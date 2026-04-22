@@ -1,0 +1,6 @@
+Job ID: 47028452
+Task:   direction   Mode: adapter
+Pairs:  data/pairs_direction.jsonl
+GPU:    Tesla V100-PCIE-16GB
+Start:  Wed Apr 22 03:22:31 EDT 2026
+End:    Wed Apr 22 03:25:16 EDT 2026

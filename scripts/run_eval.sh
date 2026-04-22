@@ -22,10 +22,12 @@ set -euo pipefail
 
 TASK="${1:-direction}"
 MODE="${2:-adapter}"   # "adapter" (default) or "base"
+EXTRA_ARGS=""
 
 case "$TASK" in
     direction) PAIRS=data/pairs_direction.jsonl    ;;
-    surprise)  PAIRS=data/pairs_eps_surprise.jsonl ;;
+    surprise)  PAIRS=data/pairs_eps_surprise.jsonl
+               EXTRA_ARGS="--balance-test"          ;;
     *) echo "Usage: sbatch scripts/run_eval.sh [direction|surprise] [adapter|base]"; exit 1 ;;
 esac
 
@@ -36,6 +38,10 @@ echo "GPU:    $(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)"
 echo "Start:  $(date)"
 
 module load python/3.12
+module load cuda/11.8.0                  # libcudart.so.11.0 for torch 2.3.1+cu118
+module load cudnn/8.7.0.84-11.8          # libcudnn.so.8
+# libcupti.so.11.8 lives under CUDA extras/CUPTI, not on the default lib path.
+export LD_LIBRARY_PATH="$CUDA_HOME/extras/CUPTI/lib64:$LD_LIBRARY_PATH"
 source venv/bin/activate
 
 mkdir -p logs outputs
@@ -43,12 +49,14 @@ mkdir -p logs outputs
 if [[ "$MODE" == "base" ]]; then
     python -m src.models.evaluate \
         --pairs "$PAIRS" \
-        --out   "outputs/$TASK/results_base.json"
+        --out   "outputs/$TASK/results_base.json" \
+        $EXTRA_ARGS
 else
     python -m src.models.evaluate \
         --pairs   "$PAIRS" \
         --adapter "outputs/$TASK/adapter" \
-        --out     "outputs/$TASK/results.json"
+        --out     "outputs/$TASK/results.json" \
+        $EXTRA_ARGS
 fi
 
 echo "End:    $(date)"

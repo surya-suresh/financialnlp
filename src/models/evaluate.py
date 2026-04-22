@@ -28,7 +28,7 @@ from sklearn.metrics import (accuracy_score, balanced_accuracy_score,
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models.finetune import load_pairs
+from models.finetune import load_pairs, head_tail_truncate, balance_classes
 
 logging.basicConfig(
     level=logging.INFO,
@@ -73,7 +73,7 @@ def load_model(base_model: str, adapter_dir):
     bnb = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_compute_dtype=torch.float16,   # V100 (sm_70) has no bf16 support
         bnb_4bit_use_double_quant=True,
     )
     base = AutoModelForCausalLM.from_pretrained(
@@ -109,8 +109,13 @@ def predict(model, tokenizer, rows, task, max_length):
     probs_pos, y_true = [], []
     for i, row in enumerate(rows):
         prompt = row["input"] + "\n\nAnswer:"
-        enc    = tokenizer(prompt, return_tensors="pt", truncation=True,
-                           max_length=max_length).to(model.device)
+        # Same head+tail truncation used during training — keeps opening
+        # remarks AND the Q&A section.
+        ids = head_tail_truncate(tokenizer, prompt, max_length)
+        enc = {
+            "input_ids":      torch.tensor([ids],            device=model.device),
+            "attention_mask": torch.tensor([[1] * len(ids)], device=model.device),
+        }
         logits = model(**enc).logits[0, -1]
         pair   = torch.tensor([logits[pos_id], logits[neg_id]])
         probs_pos.append(torch.softmax(pair, dim=0)[0].item())
@@ -129,6 +134,9 @@ def main():
     ap.add_argument("--base-model", default="Qwen/Qwen2.5-7B-Instruct")
     ap.add_argument("--out",        type=Path, required=True)
     ap.add_argument("--max-length", type=int, default=2048)
+    ap.add_argument("--balance-test", action="store_true",
+                    help="Subsample majority class in test to match minority")
+    ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
     from transformers import AutoTokenizer
@@ -136,7 +144,12 @@ def main():
     rows = load_pairs(args.pairs)
     task = detect_task(rows)
     test = chrono_test_split(rows, 0.9)
-    logger.info("Task=%s  test=%d", task, len(test))
+    logger.info("Task=%s  test=%d (before balancing)", task, len(test))
+    if args.balance_test:
+        test = balance_classes(test, seed=args.seed)
+        from collections import Counter
+        logger.info("Test balanced: %s  n=%d",
+                    dict(Counter(r["output"] for r in test)), len(test))
 
     tok_src   = args.adapter or args.base_model
     tokenizer = AutoTokenizer.from_pretrained(tok_src, trust_remote_code=True)
@@ -160,6 +173,7 @@ def main():
         "task":              task,
         "pairs_file":        str(args.pairs),
         "adapter":           args.adapter,
+        "balanced_test":     bool(args.balance_test),
         "n_test":            int(len(y_true)),
         "accuracy":          float(acc),
         "balanced_accuracy": float(bacc),

@@ -24,7 +24,9 @@ import argparse
 import json
 import logging
 import os
+import random
 import sys
+from collections import Counter
 from pathlib import Path
 
 import torch
@@ -57,13 +59,62 @@ def chrono_split(rows: list[dict], train_ratio: float = 0.9):
     return rows[:k], rows[k:]
 
 
+def balance_classes(rows: list[dict], seed: int = 42) -> list[dict]:
+    """Subsample the majority class(es) in `rows` so every class ends up with
+    the same count as the minority. Used to produce a balanced test/val set
+    so metrics aren't dominated by the majority class."""
+    rng = random.Random(seed)
+    by_class: dict[str, list[dict]] = {}
+    for r in rows:
+        by_class.setdefault(r["output"], []).append(r)
+    n_per_class = min(len(v) for v in by_class.values())
+    out = []
+    for examples in by_class.values():
+        out.extend(rng.sample(examples, n_per_class))
+    rng.shuffle(out)
+    return out
+
+
+def head_tail_truncate(tokenizer, text: str, max_length: int,
+                       head_ratio: float = 0.6) -> list[int]:
+    """Tokenize `text` and, if longer than `max_length`, keep the first
+    `head_ratio` of the budget from the start and the rest from the end.
+    Earnings calls open with management's prepared remarks (narrative) and
+    close with Q&A + forward guidance (what moves stocks). Plain front-
+    truncation drops the Q&A entirely; this keeps both."""
+    ids = tokenizer(text, add_special_tokens=False)["input_ids"]
+    if len(ids) <= max_length:
+        return ids
+    head_n = int(max_length * head_ratio)
+    tail_n = max_length - head_n
+    return ids[:head_n] + ids[-tail_n:]
+
+
+def oversample_minority(rows: list[dict], seed: int = 42) -> list[dict]:
+    """Sample minority classes with replacement so every class ends up with
+    the same count as the majority. Applied to train only — test
+    distribution is preserved."""
+    rng = random.Random(seed)
+    by_class: dict[str, list[dict]] = {}
+    for r in rows:
+        by_class.setdefault(r["output"], []).append(r)
+    max_count = max(len(v) for v in by_class.values())
+    out = []
+    for examples in by_class.values():
+        out.extend(examples)
+        shortfall = max_count - len(examples)
+        if shortfall > 0:
+            out.extend(rng.choices(examples, k=shortfall))
+    rng.shuffle(out)
+    return out
+
+
 class PairDataset(Dataset):
     """
     Tokenizes (input, output) pairs.  The input portion is masked in the
     label tensor (-100) so loss is only computed on the answer tokens.
-    Truncation keeps the start of the input — earnings call transcripts open
-    with the management's prepared remarks, which is the most informative
-    section.
+    Truncation uses head_tail_truncate to keep both the prepared remarks
+    (start) and the Q&A section (end) when the transcript exceeds max_length.
     """
     def __init__(self, rows, tokenizer, max_length: int):
         self.rows       = rows
@@ -81,9 +132,7 @@ class PairDataset(Dataset):
         # Reserve space for the answer so it never gets truncated away.
         ans_ids    = self.tokenizer(answer, add_special_tokens=False)["input_ids"]
         prompt_max = max(self.max_length - len(ans_ids), 32)
-        prompt_ids = self.tokenizer(prompt, truncation=True,
-                                    max_length=prompt_max,
-                                    add_special_tokens=False)["input_ids"]
+        prompt_ids = head_tail_truncate(self.tokenizer, prompt, prompt_max)
 
         input_ids = prompt_ids + ans_ids
         labels    = [-100] * len(prompt_ids) + list(ans_ids)
@@ -119,7 +168,7 @@ def build_model(base_model: str):
     bnb = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_compute_dtype=torch.float16,   # V100 (sm_70) has no bf16 support
         bnb_4bit_use_double_quant=True,
     )
     model = AutoModelForCausalLM.from_pretrained(
@@ -153,6 +202,8 @@ def main():
     ap.add_argument("--batch-size", type=int, default=1)
     ap.add_argument("--grad-accum", type=int, default=8)
     ap.add_argument("--seed",       type=int, default=42)
+    ap.add_argument("--balance-test", action="store_true",
+                    help="Subsample majority class in val to match minority")
     args = ap.parse_args()
 
     from transformers import AutoTokenizer, Trainer, TrainingArguments
@@ -161,12 +212,22 @@ def main():
     logger.info("Loaded %d pairs from %s", len(rows), args.pairs)
 
     train, val = chrono_split(rows, 0.9)
-    logger.info("Train=%d  Val=%d", len(train), len(val))
+    logger.info("Train=%d  Val=%d (before balancing)", len(train), len(val))
 
     counts = {}
     for r in rows:
         counts[r["output"]] = counts.get(r["output"], 0) + 1
-    logger.info("Class balance: %s", counts)
+    logger.info("Class balance (all):   %s", counts)
+    logger.info("Class balance (train): %s", dict(Counter(r["output"] for r in train)))
+
+    train = oversample_minority(train, seed=args.seed)
+    logger.info("Class balance (train, oversampled): %s  n=%d",
+                dict(Counter(r["output"] for r in train)), len(train))
+
+    if args.balance_test:
+        val = balance_classes(val, seed=args.seed)
+        logger.info("Val balanced: %s  n=%d",
+                    dict(Counter(r["output"] for r in val)), len(val))
 
     tokenizer = AutoTokenizer.from_pretrained(args.base_model, trust_remote_code=True)
     if tokenizer.pad_token is None:
@@ -192,8 +253,11 @@ def main():
         logging_steps=10,
         eval_strategy="epoch",
         save_strategy="epoch",
-        save_total_limit=1,
-        bf16=True,
+        save_total_limit=2,
+        load_best_model_at_end=True,             # val loss climbs after epoch 1
+        metric_for_best_model="eval_loss",
+        greater_is_better=False,
+        fp16=True,                               # V100 (sm_70) has no bf16
         optim="paged_adamw_8bit",
         report_to="none",
         seed=args.seed,

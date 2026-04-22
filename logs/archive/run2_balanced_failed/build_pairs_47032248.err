@@ -1,0 +1,604 @@
+04:32:06  INFO      Loading dataset (max_samples=5000) …
+04:32:08  INFO      Loading Bose345/sp500_earnings_transcripts …
+04:33:03  INFO        Raw rows: 33362, columns: ['symbol', 'quarter', 'year', 'date', 'content', 'structured_content', 'company_name', 'company_id']
+04:33:03  INFO        Resolved columns → ticker: symbol | date: date | text: content
+04:33:03  INFO      Loaded 5000 records from sp500_transcripts
+04:33:03  INFO      Fetching stock-price labels via yfinance …
+04:33:07  ERROR     HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: HES"}}}
+04:33:07  ERROR     $HES: possibly delisted; no timezone found
+04:33:07  ERROR     
+1 Failed download:
+04:33:07  ERROR     ['HES']: possibly delisted; no timezone found
+04:33:10  ERROR     $MMC: possibly delisted; no timezone found
+04:33:10  ERROR     
+1 Failed download:
+04:33:10  ERROR     ['MMC']: possibly delisted; no timezone found
+04:33:21  ERROR     $JNPR: possibly delisted; no timezone found
+04:33:21  ERROR     
+1 Failed download:
+04:33:21  ERROR     ['JNPR']: possibly delisted; no timezone found
+04:33:24  ERROR     $WRK: possibly delisted; no timezone found
+04:33:24  ERROR     
+1 Failed download:
+04:33:24  ERROR     ['WRK']: possibly delisted; no timezone found
+04:33:35  ERROR     $FI: possibly delisted; no timezone found
+04:33:35  ERROR     
+1 Failed download:
+04:33:35  ERROR     ['FI']: possibly delisted; no timezone found
+04:33:38  ERROR     $CTLT: possibly delisted; no timezone found
+04:33:38  ERROR     
+1 Failed download:
+04:33:38  ERROR     ['CTLT']: possibly delisted; no timezone found
+04:33:43  ERROR     $DAY: possibly delisted; no timezone found
+04:33:43  ERROR     
+1 Failed download:
+04:33:43  ERROR     ['DAY']: possibly delisted; no timezone found
+04:33:44  ERROR     $IPG: possibly delisted; no timezone found
+04:33:44  ERROR     
+1 Failed download:
+04:33:44  ERROR     ['IPG']: possibly delisted; no timezone found
+04:33:46  ERROR     $K: possibly delisted; no timezone found
+04:33:46  ERROR     
+1 Failed download:
+04:33:46  ERROR     ['K']: possibly delisted; no timezone found
+04:33:56  ERROR     $PARA: possibly delisted; no timezone found
+04:33:56  ERROR     
+1 Failed download:
+04:33:56  ERROR     ['PARA']: possibly delisted; no timezone found
+04:33:59  ERROR     $MRO: possibly delisted; no timezone found
+04:33:59  ERROR     
+1 Failed download:
+04:33:59  ERROR     ['MRO']: possibly delisted; no timezone found
+04:34:05  ERROR     $ANSS: possibly delisted; no timezone found
+04:34:05  ERROR     
+1 Failed download:
+04:34:05  ERROR     ['ANSS']: possibly delisted; no timezone found
+04:34:08  ERROR     $PXD: possibly delisted; no timezone found
+04:34:08  ERROR     
+1 Failed download:
+04:34:08  ERROR     ['PXD']: possibly delisted; no timezone found
+04:34:08  ERROR     $DISH: possibly delisted; no timezone found
+04:34:08  ERROR     
+1 Failed download:
+04:34:08  ERROR     ['DISH']: possibly delisted; no timezone found
+04:34:08  ERROR     $DISCK: possibly delisted; no timezone found
+04:34:08  ERROR     
+1 Failed download:
+04:34:08  ERROR     ['DISCK']: possibly delisted; no timezone found
+04:34:16  ERROR     $BF.B: possibly delisted; no price data found  (1d 2023-03-01 -> 2023-03-18)
+04:34:16  ERROR     
+1 Failed download:
+04:34:16  ERROR     ['BF.B']: possibly delisted; no price data found  (1d 2023-03-01 -> 2023-03-18)
+04:34:19  ERROR     $WBA: possibly delisted; no timezone found
+04:34:19  ERROR     
+1 Failed download:
+04:34:19  ERROR     ['WBA']: possibly delisted; no timezone found
+04:34:27  ERROR     $CMA: possibly delisted; no timezone found
+04:34:27  ERROR     
+1 Failed download:
+04:34:27  ERROR     ['CMA']: possibly delisted; no timezone found
+04:34:27  ERROR     $MMC: possibly delisted; no timezone found
+04:34:27  ERROR     
+1 Failed download:
+04:34:27  ERROR     ['MMC']: possibly delisted; no timezone found
+04:34:28  ERROR     $DFS: possibly delisted; no timezone found
+04:34:28  ERROR     
+1 Failed download:
+04:34:28  ERROR     ['DFS']: possibly delisted; no timezone found
+04:34:33  ERROR     $FRC: possibly delisted; no timezone found
+04:34:33  ERROR     
+1 Failed download:
+04:34:33  ERROR     ['FRC']: possibly delisted; no timezone found
+04:34:37  ERROR     $FI: possibly delisted; no timezone found
+04:34:37  ERROR     
+1 Failed download:
+04:34:37  ERROR     ['FI']: possibly delisted; no timezone found
+04:34:38  ERROR     $JNPR: possibly delisted; no timezone found
+04:34:38  ERROR     
+1 Failed download:
+04:34:38  ERROR     ['JNPR']: possibly delisted; no timezone found
+04:34:42  ERROR     $HES: possibly delisted; no timezone found
+04:34:42  ERROR     
+1 Failed download:
+04:34:42  ERROR     ['HES']: possibly delisted; no timezone found
+04:34:57  ERROR     $PXD: possibly delisted; no timezone found
+04:34:57  ERROR     
+1 Failed download:
+04:34:57  ERROR     ['PXD']: possibly delisted; no timezone found
+04:34:58  ERROR     $IPG: possibly delisted; no timezone found
+04:34:58  ERROR     
+1 Failed download:
+04:34:58  ERROR     ['IPG']: possibly delisted; no timezone found
+04:35:14  ERROR     $DAY: possibly delisted; no timezone found
+04:35:14  ERROR     
+1 Failed download:
+04:35:14  ERROR     ['DAY']: possibly delisted; no timezone found
+04:35:20  ERROR     $ANSS: possibly delisted; no timezone found
+04:35:20  ERROR     
+1 Failed download:
+04:35:20  ERROR     ['ANSS']: possibly delisted; no timezone found
+04:35:21  ERROR     $WRK: possibly delisted; no timezone found
+04:35:21  ERROR     
+1 Failed download:
+04:35:21  ERROR     ['WRK']: possibly delisted; no timezone found
+04:35:21  ERROR     $K: possibly delisted; no timezone found
+04:35:21  ERROR     
+1 Failed download:
+04:35:21  ERROR     ['K']: possibly delisted; no timezone found
+04:35:22  ERROR     $MRO: possibly delisted; no timezone found
+04:35:22  ERROR     
+1 Failed download:
+04:35:22  ERROR     ['MRO']: possibly delisted; no timezone found
+04:35:22  ERROR     $PARA: possibly delisted; no timezone found
+04:35:22  ERROR     
+1 Failed download:
+04:35:22  ERROR     ['PARA']: possibly delisted; no timezone found
+04:35:29  ERROR     $DISH: possibly delisted; no timezone found
+04:35:29  ERROR     
+1 Failed download:
+04:35:29  ERROR     ['DISH']: possibly delisted; no timezone found
+04:35:40  ERROR     $BF.B: possibly delisted; no price data found  (1d 2023-05-31 -> 2023-06-17)
+04:35:40  ERROR     
+1 Failed download:
+04:35:40  ERROR     ['BF.B']: possibly delisted; no price data found  (1d 2023-05-31 -> 2023-06-17)
+04:35:41  ERROR     $CTLT: possibly delisted; no timezone found
+04:35:41  ERROR     
+1 Failed download:
+04:35:41  ERROR     ['CTLT']: possibly delisted; no timezone found
+04:35:42  ERROR     $WBA: possibly delisted; no timezone found
+04:35:42  ERROR     
+1 Failed download:
+04:35:42  ERROR     ['WBA']: possibly delisted; no timezone found
+04:35:50  ERROR     $DFS: possibly delisted; no timezone found
+04:35:50  ERROR     
+1 Failed download:
+04:35:50  ERROR     ['DFS']: possibly delisted; no timezone found
+04:35:51  ERROR     $MMC: possibly delisted; no timezone found
+04:35:51  ERROR     
+1 Failed download:
+04:35:51  ERROR     ['MMC']: possibly delisted; no timezone found
+04:35:54  ERROR     $CMA: possibly delisted; no timezone found
+04:35:54  ERROR     
+1 Failed download:
+04:35:54  ERROR     ['CMA']: possibly delisted; no timezone found
+04:35:54  ERROR     $IPG: possibly delisted; no timezone found
+04:35:54  ERROR     
+1 Failed download:
+04:35:54  ERROR     ['IPG']: possibly delisted; no timezone found
+04:36:04  ERROR     $HES: possibly delisted; no timezone found
+04:36:04  ERROR     
+1 Failed download:
+04:36:04  ERROR     ['HES']: possibly delisted; no timezone found
+04:36:08  ERROR     $FI: possibly delisted; no timezone found
+04:36:08  ERROR     
+1 Failed download:
+04:36:08  ERROR     ['FI']: possibly delisted; no timezone found
+04:36:18  ERROR     $JNPR: possibly delisted; no timezone found
+04:36:18  ERROR     
+1 Failed download:
+04:36:18  ERROR     ['JNPR']: possibly delisted; no timezone found
+04:36:35  ERROR     $PXD: possibly delisted; no timezone found
+04:36:35  ERROR     
+1 Failed download:
+04:36:35  ERROR     ['PXD']: possibly delisted; no timezone found
+04:36:36  ERROR     $DAY: possibly delisted; no timezone found
+04:36:36  ERROR     
+1 Failed download:
+04:36:36  ERROR     ['DAY']: possibly delisted; no timezone found
+04:36:40  ERROR     $ANSS: possibly delisted; no timezone found
+04:36:40  ERROR     
+1 Failed download:
+04:36:40  ERROR     ['ANSS']: possibly delisted; no timezone found
+04:36:41  ERROR     $K: possibly delisted; no timezone found
+04:36:41  ERROR     
+1 Failed download:
+04:36:41  ERROR     ['K']: possibly delisted; no timezone found
+04:36:45  ERROR     $WRK: possibly delisted; no timezone found
+04:36:45  ERROR     
+1 Failed download:
+04:36:45  ERROR     ['WRK']: possibly delisted; no timezone found
+04:36:45  ERROR     $MRO: possibly delisted; no timezone found
+04:36:45  ERROR     
+1 Failed download:
+04:36:45  ERROR     ['MRO']: possibly delisted; no timezone found
+04:36:52  ERROR     $PARA: possibly delisted; no timezone found
+04:36:52  ERROR     
+1 Failed download:
+04:36:52  ERROR     ['PARA']: possibly delisted; no timezone found
+04:37:00  ERROR     $CTLT: possibly delisted; no timezone found
+04:37:00  ERROR     
+1 Failed download:
+04:37:00  ERROR     ['CTLT']: possibly delisted; no timezone found
+04:37:01  ERROR     $BF.B: possibly delisted; no price data found  (1d 2023-08-23 -> 2023-09-09)
+04:37:01  ERROR     
+1 Failed download:
+04:37:01  ERROR     ['BF.B']: possibly delisted; no price data found  (1d 2023-08-23 -> 2023-09-09)
+04:37:06  ERROR     $WBA: possibly delisted; no timezone found
+04:37:06  ERROR     
+1 Failed download:
+04:37:06  ERROR     ['WBA']: possibly delisted; no timezone found
+04:37:12  ERROR     $DFS: possibly delisted; no timezone found
+04:37:12  ERROR     
+1 Failed download:
+04:37:12  ERROR     ['DFS']: possibly delisted; no timezone found
+04:37:13  ERROR     $MMC: possibly delisted; no timezone found
+04:37:13  ERROR     
+1 Failed download:
+04:37:13  ERROR     ['MMC']: possibly delisted; no timezone found
+04:37:15  ERROR     $CMA: possibly delisted; no timezone found
+04:37:15  ERROR     
+1 Failed download:
+04:37:15  ERROR     ['CMA']: possibly delisted; no timezone found
+04:37:16  ERROR     $IPG: possibly delisted; no timezone found
+04:37:16  ERROR     
+1 Failed download:
+04:37:16  ERROR     ['IPG']: possibly delisted; no timezone found
+04:37:28  ERROR     $FI: possibly delisted; no timezone found
+04:37:28  ERROR     
+1 Failed download:
+04:37:28  ERROR     ['FI']: possibly delisted; no timezone found
+04:37:37  ERROR     $JNPR: possibly delisted; no timezone found
+04:37:37  ERROR     
+1 Failed download:
+04:37:37  ERROR     ['JNPR']: possibly delisted; no timezone found
+04:37:54  ERROR     $DAY: possibly delisted; no timezone found
+04:37:54  ERROR     
+1 Failed download:
+04:37:54  ERROR     ['DAY']: possibly delisted; no timezone found
+04:37:56  ERROR     $ANSS: possibly delisted; no timezone found
+04:37:56  ERROR     
+1 Failed download:
+04:37:56  ERROR     ['ANSS']: possibly delisted; no timezone found
+04:38:04  ERROR     $MRO: possibly delisted; no timezone found
+04:38:04  ERROR     
+1 Failed download:
+04:38:04  ERROR     ['MRO']: possibly delisted; no timezone found
+04:38:04  ERROR     $PARA: possibly delisted; no timezone found
+04:38:04  ERROR     
+1 Failed download:
+04:38:04  ERROR     ['PARA']: possibly delisted; no timezone found
+04:38:09  ERROR     $DISH: possibly delisted; no timezone found
+04:38:09  ERROR     
+1 Failed download:
+04:38:09  ERROR     ['DISH']: possibly delisted; no timezone found
+04:38:14  ERROR     $K: possibly delisted; no timezone found
+04:38:14  ERROR     
+1 Failed download:
+04:38:14  ERROR     ['K']: possibly delisted; no timezone found
+04:38:19  ERROR     $CTLT: possibly delisted; no timezone found
+04:38:19  ERROR     
+1 Failed download:
+04:38:19  ERROR     ['CTLT']: possibly delisted; no timezone found
+04:38:23  ERROR     $BF.B: possibly delisted; no price data found  (1d 2023-11-29 -> 2023-12-16)
+04:38:23  ERROR     
+1 Failed download:
+04:38:23  ERROR     ['BF.B']: possibly delisted; no price data found  (1d 2023-11-29 -> 2023-12-16)
+04:38:27  ERROR     $WBA: possibly delisted; no timezone found
+04:38:27  ERROR     
+1 Failed download:
+04:38:27  ERROR     ['WBA']: possibly delisted; no timezone found
+04:38:31  ERROR     $DFS: possibly delisted; no timezone found
+04:38:31  ERROR     
+1 Failed download:
+04:38:31  ERROR     ['DFS']: possibly delisted; no timezone found
+04:38:32  ERROR     $CMA: possibly delisted; no timezone found
+04:38:32  ERROR     
+1 Failed download:
+04:38:32  ERROR     ['CMA']: possibly delisted; no timezone found
+04:38:41  ERROR     $MMC: possibly delisted; no timezone found
+04:38:41  ERROR     
+1 Failed download:
+04:38:41  ERROR     ['MMC']: possibly delisted; no timezone found
+04:39:06  ERROR     $FI: possibly delisted; no timezone found
+04:39:06  ERROR     
+1 Failed download:
+04:39:06  ERROR     ['FI']: possibly delisted; no timezone found
+04:39:09  ERROR     $DAY: possibly delisted; no timezone found
+04:39:09  ERROR     
+1 Failed download:
+04:39:09  ERROR     ['DAY']: possibly delisted; no timezone found
+04:39:15  ERROR     $IPG: possibly delisted; no timezone found
+04:39:15  ERROR     
+1 Failed download:
+04:39:15  ERROR     ['IPG']: possibly delisted; no timezone found
+04:39:17  ERROR     $K: possibly delisted; no timezone found
+04:39:17  ERROR     
+1 Failed download:
+04:39:17  ERROR     ['K']: possibly delisted; no timezone found
+04:39:36  ERROR     $MRO: possibly delisted; no timezone found
+04:39:36  ERROR     
+1 Failed download:
+04:39:36  ERROR     ['MRO']: possibly delisted; no timezone found
+04:39:43  ERROR     $PARA: possibly delisted; no timezone found
+04:39:43  ERROR     
+1 Failed download:
+04:39:43  ERROR     ['PARA']: possibly delisted; no timezone found
+04:39:46  ERROR     $BF.B: possibly delisted; no price data found  (1d 2024-02-28 -> 2024-03-16)
+04:39:46  ERROR     
+1 Failed download:
+04:39:46  ERROR     ['BF.B']: possibly delisted; no price data found  (1d 2024-02-28 -> 2024-03-16)
+04:39:50  ERROR     $WBA: possibly delisted; no timezone found
+04:39:50  ERROR     
+1 Failed download:
+04:39:50  ERROR     ['WBA']: possibly delisted; no timezone found
+04:39:56  ERROR     $DFS: possibly delisted; no timezone found
+04:39:56  ERROR     
+1 Failed download:
+04:39:56  ERROR     ['DFS']: possibly delisted; no timezone found
+04:39:56  ERROR     $CMA: possibly delisted; no timezone found
+04:39:56  ERROR     
+1 Failed download:
+04:39:56  ERROR     ['CMA']: possibly delisted; no timezone found
+04:39:58  ERROR     $MMC: possibly delisted; no timezone found
+04:39:58  ERROR     
+1 Failed download:
+04:39:58  ERROR     ['MMC']: possibly delisted; no timezone found
+04:40:00  ERROR     $FI: possibly delisted; no timezone found
+04:40:00  ERROR     
+1 Failed download:
+04:40:00  ERROR     ['FI']: possibly delisted; no timezone found
+04:40:08  ERROR     $IPG: possibly delisted; no timezone found
+04:40:08  ERROR     
+1 Failed download:
+04:40:08  ERROR     ['IPG']: possibly delisted; no timezone found
+04:40:27  ERROR     $PARA: possibly delisted; no timezone found
+04:40:27  ERROR     
+1 Failed download:
+04:40:27  ERROR     ['PARA']: possibly delisted; no timezone found
+04:40:33  ERROR     $DAY: possibly delisted; no timezone found
+04:40:33  ERROR     
+1 Failed download:
+04:40:33  ERROR     ['DAY']: possibly delisted; no timezone found
+04:40:40  ERROR     $MRO: possibly delisted; no timezone found
+04:40:40  ERROR     
+1 Failed download:
+04:40:40  ERROR     ['MRO']: possibly delisted; no timezone found
+04:40:45  ERROR     $K: possibly delisted; no timezone found
+04:40:45  ERROR     
+1 Failed download:
+04:40:45  ERROR     ['K']: possibly delisted; no timezone found
+04:41:08  ERROR     $BF.B: possibly delisted; no price data found  (1d 2024-05-29 -> 2024-06-15)
+04:41:08  ERROR     
+1 Failed download:
+04:41:08  ERROR     ['BF.B']: possibly delisted; no price data found  (1d 2024-05-29 -> 2024-06-15)
+04:41:11  ERROR     $WBA: possibly delisted; no timezone found
+04:41:11  ERROR     
+1 Failed download:
+04:41:11  ERROR     ['WBA']: possibly delisted; no timezone found
+04:41:16  ERROR     $DFS: possibly delisted; no timezone found
+04:41:16  ERROR     
+1 Failed download:
+04:41:16  ERROR     ['DFS']: possibly delisted; no timezone found
+04:41:17  ERROR     $MMC: possibly delisted; no timezone found
+04:41:17  ERROR     
+1 Failed download:
+04:41:17  ERROR     ['MMC']: possibly delisted; no timezone found
+04:41:19  ERROR     $CMA: possibly delisted; no timezone found
+04:41:19  ERROR     
+1 Failed download:
+04:41:19  ERROR     ['CMA']: possibly delisted; no timezone found
+04:41:27  ERROR     $FI: possibly delisted; no timezone found
+04:41:27  ERROR     
+1 Failed download:
+04:41:27  ERROR     ['FI']: possibly delisted; no timezone found
+04:41:27  ERROR     $IPG: possibly delisted; no timezone found
+04:41:27  ERROR     
+1 Failed download:
+04:41:27  ERROR     ['IPG']: possibly delisted; no timezone found
+04:41:49  ERROR     $DAY: possibly delisted; no timezone found
+04:41:49  ERROR     
+1 Failed download:
+04:41:49  ERROR     ['DAY']: possibly delisted; no timezone found
+04:42:00  ERROR     $K: possibly delisted; no timezone found
+04:42:00  ERROR     
+1 Failed download:
+04:42:00  ERROR     ['K']: possibly delisted; no timezone found
+04:42:20  ERROR     $PARA: possibly delisted; no timezone found
+04:42:20  ERROR     
+1 Failed download:
+04:42:20  ERROR     ['PARA']: possibly delisted; no timezone found
+04:42:27  ERROR     $BF.B: possibly delisted; no price data found  (1d 2024-08-22 -> 2024-09-08)
+04:42:27  ERROR     
+1 Failed download:
+04:42:27  ERROR     ['BF.B']: possibly delisted; no price data found  (1d 2024-08-22 -> 2024-09-08)
+04:42:34  ERROR     $WBA: possibly delisted; no timezone found
+04:42:34  ERROR     
+1 Failed download:
+04:42:34  ERROR     ['WBA']: possibly delisted; no timezone found
+04:42:37  ERROR     $DFS: possibly delisted; no timezone found
+04:42:37  ERROR     
+1 Failed download:
+04:42:37  ERROR     ['DFS']: possibly delisted; no timezone found
+04:42:37  ERROR     $MMC: possibly delisted; no timezone found
+04:42:37  ERROR     
+1 Failed download:
+04:42:37  ERROR     ['MMC']: possibly delisted; no timezone found
+04:42:39  ERROR     $CMA: possibly delisted; no timezone found
+04:42:39  ERROR     
+1 Failed download:
+04:42:39  ERROR     ['CMA']: possibly delisted; no timezone found
+04:42:41  ERROR     $FI: possibly delisted; no timezone found
+04:42:41  ERROR     
+1 Failed download:
+04:42:41  ERROR     ['FI']: possibly delisted; no timezone found
+04:42:42  ERROR     $IPG: possibly delisted; no timezone found
+04:42:42  ERROR     
+1 Failed download:
+04:42:42  ERROR     ['IPG']: possibly delisted; no timezone found
+04:43:06  ERROR     $DAY: possibly delisted; no timezone found
+04:43:06  ERROR     
+1 Failed download:
+04:43:06  ERROR     ['DAY']: possibly delisted; no timezone found
+04:43:41  ERROR     $PARA: possibly delisted; no timezone found
+04:43:41  ERROR     
+1 Failed download:
+04:43:41  ERROR     ['PARA']: possibly delisted; no timezone found
+04:43:48  ERROR     $BF.B: possibly delisted; no price data found  (1d 2024-11-28 -> 2024-12-15)
+04:43:48  ERROR     
+1 Failed download:
+04:43:48  ERROR     ['BF.B']: possibly delisted; no price data found  (1d 2024-11-28 -> 2024-12-15)
+04:43:53  ERROR     $WBA: possibly delisted; no timezone found
+04:43:53  ERROR     
+1 Failed download:
+04:43:53  ERROR     ['WBA']: possibly delisted; no timezone found
+04:43:59  ERROR     $CMA: possibly delisted; no timezone found
+04:43:59  ERROR     
+1 Failed download:
+04:43:59  ERROR     ['CMA']: possibly delisted; no timezone found
+04:44:01  ERROR     $DFS: possibly delisted; no timezone found
+04:44:01  ERROR     
+1 Failed download:
+04:44:01  ERROR     ['DFS']: possibly delisted; no timezone found
+04:44:11  ERROR     $MMC: possibly delisted; no timezone found
+04:44:11  ERROR     
+1 Failed download:
+04:44:11  ERROR     ['MMC']: possibly delisted; no timezone found
+04:44:28  ERROR     $DAY: possibly delisted; no timezone found
+04:44:28  ERROR     
+1 Failed download:
+04:44:28  ERROR     ['DAY']: possibly delisted; no timezone found
+04:44:28  ERROR     $FI: possibly delisted; no timezone found
+04:44:28  ERROR     
+1 Failed download:
+04:44:28  ERROR     ['FI']: possibly delisted; no timezone found
+04:44:45  ERROR     $IPG: possibly delisted; no timezone found
+04:44:45  ERROR     
+1 Failed download:
+04:44:45  ERROR     ['IPG']: possibly delisted; no timezone found
+04:45:05  ERROR     $PARA: possibly delisted; no timezone found
+04:45:05  ERROR     
+1 Failed download:
+04:45:05  ERROR     ['PARA']: possibly delisted; no timezone found
+04:45:10  ERROR     $BF.B: possibly delisted; no price data found  (1d 2025-02-26 -> 2025-03-15)
+04:45:10  ERROR     
+1 Failed download:
+04:45:10  ERROR     ['BF.B']: possibly delisted; no price data found  (1d 2025-02-26 -> 2025-03-15)
+04:45:20  ERROR     $MMC: possibly delisted; no timezone found
+04:45:20  ERROR     
+1 Failed download:
+04:45:20  ERROR     ['MMC']: possibly delisted; no timezone found
+04:45:31  ERROR     $DFS: possibly delisted; no timezone found
+04:45:31  ERROR     
+1 Failed download:
+04:45:31  ERROR     ['DFS']: possibly delisted; no timezone found
+04:45:32  ERROR     $FI: possibly delisted; no timezone found
+04:45:32  ERROR     
+1 Failed download:
+04:45:32  ERROR     ['FI']: possibly delisted; no timezone found
+04:45:33  ERROR     $IPG: possibly delisted; no timezone found
+04:45:33  ERROR     
+1 Failed download:
+04:45:33  ERROR     ['IPG']: possibly delisted; no timezone found
+04:46:15  ERROR     $DAY: possibly delisted; no timezone found
+04:46:15  ERROR     
+1 Failed download:
+04:46:15  ERROR     ['DAY']: possibly delisted; no timezone found
+04:46:22  ERROR     $PARA: possibly delisted; no timezone found
+04:46:22  ERROR     
+1 Failed download:
+04:46:22  ERROR     ['PARA']: possibly delisted; no timezone found
+04:46:24  INFO      Fetching EPS surprise labels via yahooquery …
+04:47:12  INFO        EPS progress: 50 / 4877
+04:47:59  INFO        EPS progress: 100 / 4877
+04:48:47  INFO        EPS progress: 150 / 4877
+04:49:34  INFO        EPS progress: 200 / 4877
+04:50:21  INFO        EPS progress: 250 / 4877
+04:51:08  INFO        EPS progress: 300 / 4877
+04:51:57  INFO        EPS progress: 350 / 4877
+04:52:43  INFO        EPS progress: 400 / 4877
+04:53:30  INFO        EPS progress: 450 / 4877
+04:54:16  INFO        EPS progress: 500 / 4877
+04:55:04  INFO        EPS progress: 550 / 4877
+04:55:52  INFO        EPS progress: 600 / 4877
+04:56:39  INFO        EPS progress: 650 / 4877
+04:57:27  INFO        EPS progress: 700 / 4877
+04:58:14  INFO        EPS progress: 750 / 4877
+04:59:00  INFO        EPS progress: 800 / 4877
+04:59:35  INFO        EPS progress: 850 / 4877
+05:00:05  INFO        EPS progress: 900 / 4877
+05:00:34  INFO        EPS progress: 950 / 4877
+05:01:04  INFO        EPS progress: 1000 / 4877
+05:01:33  INFO        EPS progress: 1050 / 4877
+05:02:01  INFO        EPS progress: 1100 / 4877
+05:02:30  INFO        EPS progress: 1150 / 4877
+05:02:59  INFO        EPS progress: 1200 / 4877
+05:03:28  INFO        EPS progress: 1250 / 4877
+05:03:56  INFO        EPS progress: 1300 / 4877
+05:04:25  INFO        EPS progress: 1350 / 4877
+05:04:54  INFO        EPS progress: 1400 / 4877
+05:05:23  INFO        EPS progress: 1450 / 4877
+05:05:52  INFO        EPS progress: 1500 / 4877
+05:06:21  INFO        EPS progress: 1550 / 4877
+05:06:50  INFO        EPS progress: 1600 / 4877
+05:07:19  INFO        EPS progress: 1650 / 4877
+05:07:48  INFO        EPS progress: 1700 / 4877
+05:08:17  INFO        EPS progress: 1750 / 4877
+05:08:46  INFO        EPS progress: 1800 / 4877
+05:09:15  INFO        EPS progress: 1850 / 4877
+05:09:44  INFO        EPS progress: 1900 / 4877
+05:10:13  INFO        EPS progress: 1950 / 4877
+05:10:42  INFO        EPS progress: 2000 / 4877
+05:11:11  INFO        EPS progress: 2050 / 4877
+05:11:41  INFO        EPS progress: 2100 / 4877
+05:12:09  INFO        EPS progress: 2150 / 4877
+05:12:38  INFO        EPS progress: 2200 / 4877
+05:13:07  INFO        EPS progress: 2250 / 4877
+05:13:36  INFO        EPS progress: 2300 / 4877
+05:14:05  INFO        EPS progress: 2350 / 4877
+05:14:34  INFO        EPS progress: 2400 / 4877
+05:15:04  INFO        EPS progress: 2450 / 4877
+05:15:34  INFO        EPS progress: 2500 / 4877
+05:16:02  INFO        EPS progress: 2550 / 4877
+05:16:31  INFO        EPS progress: 2600 / 4877
+05:17:01  INFO        EPS progress: 2650 / 4877
+05:17:30  INFO        EPS progress: 2700 / 4877
+05:17:59  INFO        EPS progress: 2750 / 4877
+05:18:28  INFO        EPS progress: 2800 / 4877
+05:18:57  INFO        EPS progress: 2850 / 4877
+05:19:26  INFO        EPS progress: 2900 / 4877
+05:19:55  INFO        EPS progress: 2950 / 4877
+05:20:25  INFO        EPS progress: 3000 / 4877
+05:20:55  INFO        EPS progress: 3050 / 4877
+05:21:24  INFO        EPS progress: 3100 / 4877
+05:21:53  INFO        EPS progress: 3150 / 4877
+05:22:23  INFO        EPS progress: 3200 / 4877
+05:22:52  INFO        EPS progress: 3250 / 4877
+05:23:20  INFO        EPS progress: 3300 / 4877
+05:23:50  INFO        EPS progress: 3350 / 4877
+05:24:19  INFO        EPS progress: 3400 / 4877
+05:24:49  INFO        EPS progress: 3450 / 4877
+05:25:17  INFO        EPS progress: 3500 / 4877
+05:25:45  INFO        EPS progress: 3550 / 4877
+05:26:14  INFO        EPS progress: 3600 / 4877
+05:26:44  INFO        EPS progress: 3650 / 4877
+05:27:13  INFO        EPS progress: 3700 / 4877
+05:27:42  INFO        EPS progress: 3750 / 4877
+05:28:11  INFO        EPS progress: 3800 / 4877
+05:28:40  INFO        EPS progress: 3850 / 4877
+05:29:09  INFO        EPS progress: 3900 / 4877
+05:29:38  INFO        EPS progress: 3950 / 4877
+05:30:07  INFO        EPS progress: 4000 / 4877
+05:30:36  INFO        EPS progress: 4050 / 4877
+05:31:05  INFO        EPS progress: 4100 / 4877
+05:31:34  INFO        EPS progress: 4150 / 4877
+05:32:04  INFO        EPS progress: 4200 / 4877
+05:32:33  INFO        EPS progress: 4250 / 4877
+05:33:02  INFO        EPS progress: 4300 / 4877
+05:33:31  INFO        EPS progress: 4350 / 4877
+05:34:00  INFO        EPS progress: 4400 / 4877
+05:34:29  INFO        EPS progress: 4450 / 4877
+05:34:58  INFO        EPS progress: 4500 / 4877
+05:35:27  INFO        EPS progress: 4550 / 4877
+05:35:57  INFO        EPS progress: 4600 / 4877
+05:36:27  INFO        EPS progress: 4650 / 4877
+05:36:57  INFO        EPS progress: 4700 / 4877
+05:37:26  INFO        EPS progress: 4750 / 4877
+05:37:55  INFO        EPS progress: 4800 / 4877
+05:38:24  INFO        EPS progress: 4850 / 4877
+05:38:40  INFO      Final dataset: 4877 records | direction labels: {1: 2564, 0: 2313} | eps labels: {1: 640, 0: 200}
+05:38:40  INFO      Loaded 4877 records
+05:38:44  INFO      Wrote 4877 records → data/pairs_direction.jsonl
+05:38:44  INFO      Wrote 840 records → data/pairs_eps_surprise.jsonl
+05:38:44  INFO      Direction pairs: 4877 total | up=52.6%  down=47.4%
+05:38:44  INFO      EPS pairs:       840 total | beat=76.2%  miss=23.8%
+05:38:44  INFO      Done.

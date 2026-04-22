@@ -157,10 +157,12 @@ def main():
         df = df.rename(columns={"label": "label_direction"})
         df["price_change_pct"] = np.where(df["label_direction"] == 1, 0.02, -0.02)
     else:
+        # Fail loudly rather than silently producing synthetic pairs when the
+        # real datasets cannot be loaded (e.g. env misconfig on the job node).
         df = load_dataset(
             max_samples=args.max_samples,
             price_window=args.price_window,
-            use_synthetic_fallback=True,
+            use_synthetic_fallback=False,
         )
 
     logger.info("Loaded %d records", len(df))
