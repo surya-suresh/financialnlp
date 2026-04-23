@@ -58,8 +58,8 @@ if [[ "$CONTEXT" == "true" ]]; then
 fi
 
 case "$MODE" in
-    base)    OUT="outputs/${TASK}/results_prompt_base_v3_${OUT_SUFFIX}.json" ;;
-    adapter) OUT="outputs/${TASK}/results_prompt_ft_v3_${OUT_SUFFIX}.json"   ;;
+    base)    OUT="outputs/${TASK}/results_prompt_base_v4_${OUT_SUFFIX}.json" ;;
+    adapter) OUT="outputs/${TASK}/results_prompt_ft_v4_${OUT_SUFFIX}.json"   ;;
     *)
         echo "MODE must be 'base' or 'adapter'"
         exit 1
@@ -94,26 +94,26 @@ if [[ "$MIN_EPS_MARGIN" != "0" ]]; then
     EXTRA_ARGS="$EXTRA_ARGS --min-eps-margin $MIN_EPS_MARGIN"
 fi
 
-if [[ "$CONTEXT" == "true" ]]; then
-    EXTRA_ARGS="$EXTRA_ARGS --context"
-fi
-
 if [[ "$MODE" == "adapter" ]]; then
     ADAPTER_DIR="${ADAPTER_OVERRIDE:-$ADAPTER}"
     python -m src.models.prompt_eval \
         --pairs          "$PAIRS" \
         --adapter        "$ADAPTER_DIR" \
         --out            "$OUT" \
-        --n-shots        3 \
-        --excerpt-tokens 200 \
+        --n-shots        4 \
+        --excerpt-tokens 150 \
+        --max-length     3072 \
+        --context \
         --seed           "$SEED" \
         $EXTRA_ARGS
 else
     python -m src.models.prompt_eval \
         --pairs          "$PAIRS" \
         --out            "$OUT" \
-        --n-shots        3 \
-        --excerpt-tokens 200 \
+        --n-shots        4 \
+        --excerpt-tokens 150 \
+        --max-length     3072 \
+        --context \
         --seed           "$SEED" \
         $EXTRA_ARGS
 fi

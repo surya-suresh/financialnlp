@@ -303,7 +303,7 @@ def build_prompt(system: str, shots: list[dict], shot_excerpts: list[str],
     # consistent across demonstrations and the test example.  Fall back to
     # head+tail only if extraction yields nothing (e.g. non-English transcript).
     # Iteratively tighten budget to guard against detokenise→retokenise drift.
-    for _ in range(20):
+    for _ in range(5):
         test_text = extract_top_sentences(raw_test, tokenizer, test_budget)
         if not test_text:
             ids = head_tail_truncate(tokenizer, raw_test, test_budget)
@@ -311,7 +311,7 @@ def build_prompt(system: str, shots: list[dict], shot_excerpts: list[str],
         full_prompt = header + ex_block + test_header + test_text + suffix
         if len(tokenizer(full_prompt, add_special_tokens=False)["input_ids"]) <= max_length:
             break
-        test_budget = max(test_budget - 16, 64)
+        test_budget = max(test_budget - 8, 64)
 
     return full_prompt
 
@@ -333,6 +333,8 @@ def predict(model, tokenizer, prompts: list[str], labels: list[int],
     pos_id = first_subword_id(tokenizer, pos_word)
     neg_id = first_subword_id(tokenizer, neg_word)
 
+    suffix_ids = tokenizer("\nAnswer:", add_special_tokens=False)["input_ids"]
+
     probs_pos, y_true = [], []
     for i, (prompt, label) in enumerate(zip(prompts, labels)):
         ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
@@ -342,11 +344,10 @@ def predict(model, tokenizer, prompts: list[str], labels: list[int],
                 f"The 'Answer:' suffix would be truncated, invalidating the logit read. "
                 f"Reduce --excerpt-tokens or --max-length."
             )
-        tail_text = tokenizer.decode(ids[-10:], skip_special_tokens=True)
-        if not tail_text.rstrip().endswith("Answer:"):
+        if ids[-len(suffix_ids):] != suffix_ids:
             raise RuntimeError(
-                f"Prompt {i} does not end with 'Answer:'. "
-                f"Tail decode: {tail_text!r}"
+                f"Prompt {i} does not end with the expected 'Answer:' token sequence. "
+                f"Last tokens: {ids[-len(suffix_ids):]}, expected: {suffix_ids}"
             )
         enc = {
             "input_ids":      torch.tensor([ids],            device=model.device),
@@ -376,7 +377,7 @@ def main():
     ap.add_argument("--n-shots",        type=int,  default=4)
     ap.add_argument("--excerpt-tokens", type=int,  default=150,
                     help="Token budget per demonstration excerpt (default 150)")
-    ap.add_argument("--max-length",     type=int,  default=3072)
+    ap.add_argument("--max-length",     type=int,  default=6144)
     ap.add_argument("--min-eps-margin", type=float, default=0.0,
                     help=("For EPS surprise, drop rows with abs(reported_eps - "
                           "consensus_eps) below this value before splitting."))
@@ -470,7 +471,6 @@ def main():
         "adapter":           args.adapter,
         "n_shots":           args.n_shots,
         "seed":              args.seed,
-        "max_length":        args.max_length,
         "cot":               False,
         "context":           bool(args.context),
         "excerpt_tokens":    args.excerpt_tokens,
