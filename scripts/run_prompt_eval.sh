@@ -22,8 +22,13 @@
 
 set -euo pipefail
 
-TASK="${1:-direction}"   # direction | surprise
-MODE="${2:-base}"        # base | adapter
+TASK="${1:-direction}"        # direction | surprise
+MODE="${2:-base}"             # base | adapter
+SEED="${3:-42}"
+BALANCE_TEST="${4:-false}"    # true | false
+MIN_EPS_MARGIN="${5:-0}"
+ADAPTER_OVERRIDE="${6:-}"
+CONTEXT="${7:-false}"         # true | false  — prepend non-transcript data block
 EXTRA_ARGS=""
 
 case "$TASK" in
@@ -34,7 +39,6 @@ case "$TASK" in
     surprise)
         PAIRS=data/pairs_eps_surprise.jsonl
         ADAPTER=outputs/surprise/adapter
-        EXTRA_ARGS="--balance-test"
         ;;
     *)
         echo "Usage: sbatch scripts/run_prompt_eval.sh [direction|surprise] [base|adapter]"
@@ -42,9 +46,20 @@ case "$TASK" in
         ;;
 esac
 
+OUT_SUFFIX="seed${SEED}"
+if [[ "$MIN_EPS_MARGIN" != "0" ]]; then
+    OUT_SUFFIX="${OUT_SUFFIX}_margin${MIN_EPS_MARGIN}"
+fi
+if [[ "$BALANCE_TEST" == "true" ]]; then
+    OUT_SUFFIX="${OUT_SUFFIX}_balanced"
+fi
+if [[ "$CONTEXT" == "true" ]]; then
+    OUT_SUFFIX="${OUT_SUFFIX}_ctx"
+fi
+
 case "$MODE" in
-    base)    OUT="outputs/${TASK}/results_prompt_base_v3.json" ;;
-    adapter) OUT="outputs/${TASK}/results_prompt_ft_v3.json"   ;;
+    base)    OUT="outputs/${TASK}/results_prompt_base_v3_${OUT_SUFFIX}.json" ;;
+    adapter) OUT="outputs/${TASK}/results_prompt_ft_v3_${OUT_SUFFIX}.json"   ;;
     *)
         echo "MODE must be 'base' or 'adapter'"
         exit 1
@@ -53,6 +68,11 @@ esac
 
 echo "Job ID:  $SLURM_JOB_ID"
 echo "Task:    $TASK   Mode: $MODE"
+echo "Seed:    $SEED"
+echo "Balance: $BALANCE_TEST"
+echo "EPS min: $MIN_EPS_MARGIN"
+echo "Context: $CONTEXT"
+echo "Adapter: ${ADAPTER_OVERRIDE:-$ADAPTER}"
 echo "Pairs:   $PAIRS"
 echo "Out:     $OUT"
 echo "GPU:     $(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)"
@@ -66,13 +86,27 @@ source venv/bin/activate
 
 mkdir -p logs outputs/"$TASK"
 
+if [[ "$BALANCE_TEST" == "true" ]]; then
+    EXTRA_ARGS="$EXTRA_ARGS --balance-test"
+fi
+
+if [[ "$MIN_EPS_MARGIN" != "0" ]]; then
+    EXTRA_ARGS="$EXTRA_ARGS --min-eps-margin $MIN_EPS_MARGIN"
+fi
+
+if [[ "$CONTEXT" == "true" ]]; then
+    EXTRA_ARGS="$EXTRA_ARGS --context"
+fi
+
 if [[ "$MODE" == "adapter" ]]; then
+    ADAPTER_DIR="${ADAPTER_OVERRIDE:-$ADAPTER}"
     python -m src.models.prompt_eval \
         --pairs          "$PAIRS" \
-        --adapter        "$ADAPTER" \
+        --adapter        "$ADAPTER_DIR" \
         --out            "$OUT" \
         --n-shots        3 \
         --excerpt-tokens 200 \
+        --seed           "$SEED" \
         $EXTRA_ARGS
 else
     python -m src.models.prompt_eval \
@@ -80,6 +114,7 @@ else
         --out            "$OUT" \
         --n-shots        3 \
         --excerpt-tokens 200 \
+        --seed           "$SEED" \
         $EXTRA_ARGS
 fi
 

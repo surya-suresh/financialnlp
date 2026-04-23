@@ -21,18 +21,25 @@
 set -euo pipefail
 
 TASK="${1:-direction}"
-MODE="${2:-adapter}"   # "adapter" (default) or "base"
+MODE="${2:-adapter}"              # adapter | base
+VIEWS="${3:-head_tail}"           # comma-separated: head_tail,tail_heavy,front,prepared,qa
+BALANCE_TEST="${4:-false}"        # true | false
+MIN_EPS_MARGIN="${5:-0}"
+ADAPTER_OVERRIDE="${6:-}"
 EXTRA_ARGS=""
 
 case "$TASK" in
     direction) PAIRS=data/pairs_direction.jsonl    ;;
-    surprise)  PAIRS=data/pairs_eps_surprise.jsonl
-               EXTRA_ARGS="--balance-test"          ;;
-    *) echo "Usage: sbatch scripts/run_eval.sh [direction|surprise] [adapter|base]"; exit 1 ;;
+    surprise)  PAIRS=data/pairs_eps_surprise.jsonl ;;
+    *) echo "Usage: sbatch scripts/run_eval.sh [direction|surprise] [adapter|base] [views] [balance-test] [min-eps-margin]"; exit 1 ;;
 esac
 
 echo "Job ID: $SLURM_JOB_ID"
 echo "Task:   $TASK   Mode: $MODE"
+echo "Views:  $VIEWS"
+echo "Balance:$BALANCE_TEST"
+echo "EPS min:$MIN_EPS_MARGIN"
+echo "Adapter:${ADAPTER_OVERRIDE:-outputs/$TASK/adapter}"
 echo "Pairs:  $PAIRS"
 echo "GPU:    $(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)"
 echo "Start:  $(date)"
@@ -46,16 +53,37 @@ source venv/bin/activate
 
 mkdir -p logs outputs
 
+if [[ "$BALANCE_TEST" == "true" ]]; then
+    EXTRA_ARGS="$EXTRA_ARGS --balance-test"
+fi
+
+if [[ "$MIN_EPS_MARGIN" != "0" ]]; then
+    EXTRA_ARGS="$EXTRA_ARGS --min-eps-margin $MIN_EPS_MARGIN"
+fi
+
+SAFE_VIEWS="${VIEWS//,/_}"
+if [[ "$VIEWS" == "head_tail" && "$MIN_EPS_MARGIN" == "0" && "$BALANCE_TEST" == "false" ]]; then
+    BASE_OUT="outputs/$TASK/results"
+else
+    BASE_OUT="outputs/$TASK/results_${SAFE_VIEWS}_margin${MIN_EPS_MARGIN}"
+    if [[ "$BALANCE_TEST" == "true" ]]; then
+        BASE_OUT="${BASE_OUT}_balanced"
+    fi
+fi
+
 if [[ "$MODE" == "base" ]]; then
     python -m src.models.evaluate \
         --pairs "$PAIRS" \
-        --out   "outputs/$TASK/results_base.json" \
+        --out   "${BASE_OUT}_base.json" \
+        --views "$VIEWS" \
         $EXTRA_ARGS
 else
+    ADAPTER_DIR="${ADAPTER_OVERRIDE:-outputs/$TASK/adapter}"
     python -m src.models.evaluate \
         --pairs   "$PAIRS" \
-        --adapter "outputs/$TASK/adapter" \
-        --out     "outputs/$TASK/results.json" \
+        --adapter "$ADAPTER_DIR" \
+        --out     "${BASE_OUT}.json" \
+        --views   "$VIEWS" \
         $EXTRA_ARGS
 fi
 

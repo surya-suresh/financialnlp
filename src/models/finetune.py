@@ -75,6 +75,32 @@ def balance_classes(rows: list[dict], seed: int = 42) -> list[dict]:
     return out
 
 
+def eps_margin(row: dict) -> float | None:
+    """Absolute reported-vs-consensus EPS gap, when available."""
+    try:
+        reported = row.get("reported_eps")
+        consensus = row.get("consensus_eps")
+        if reported is None or consensus is None:
+            return None
+        return abs(float(reported) - float(consensus))
+    except (TypeError, ValueError):
+        return None
+
+
+def filter_by_eps_margin(rows: list[dict], min_margin: float) -> list[dict]:
+    """Drop EPS surprise examples whose reported/consensus gap is too small."""
+    if min_margin <= 0:
+        return rows
+    kept = [r for r in rows if (eps_margin(r) is not None and eps_margin(r) >= min_margin)]
+    logger.info(
+        "EPS margin filter %.4f: kept %d / %d rows",
+        min_margin,
+        len(kept),
+        len(rows),
+    )
+    return kept
+
+
 def head_tail_truncate(tokenizer, text: str, max_length: int,
                        head_ratio: float = 0.6) -> list[int]:
     """Tokenize `text` and, if longer than `max_length`, keep the first
@@ -202,6 +228,9 @@ def main():
     ap.add_argument("--batch-size", type=int, default=1)
     ap.add_argument("--grad-accum", type=int, default=8)
     ap.add_argument("--seed",       type=int, default=42)
+    ap.add_argument("--min-eps-margin", type=float, default=0.0,
+                    help=("For EPS surprise, drop rows with abs(reported_eps - "
+                          "consensus_eps) below this value before splitting."))
     ap.add_argument("--balance-test", action="store_true",
                     help="Subsample majority class in val to match minority")
     args = ap.parse_args()
@@ -209,6 +238,7 @@ def main():
     from transformers import AutoTokenizer, Trainer, TrainingArguments
 
     rows = load_pairs(args.pairs)
+    rows = filter_by_eps_margin(rows, args.min_eps_margin)
     logger.info("Loaded %d pairs from %s", len(rows), args.pairs)
 
     train, val = chrono_split(rows, 0.9)

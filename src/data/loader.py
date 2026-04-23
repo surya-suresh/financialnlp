@@ -400,3 +400,163 @@ def chronological_split(df: pd.DataFrame,
     df = df.sort_values("date").reset_index(drop=True)
     split = int(len(df) * train_ratio)
     return df.iloc[:split].copy(), df.iloc[split:].copy()
+
+
+# ---------------------------------------------------------------------------
+# Non-transcript context block (for prompt augmentation)
+# ---------------------------------------------------------------------------
+
+def fetch_context_blocks_batch(rows: list[dict]) -> dict:
+    """
+    Pre-fetch non-transcript contextual features for a list of JSONL pair rows.
+
+    Returns a dict keyed by (ticker, date_str) → formatted context block string.
+
+    Features (no label leakage — reported_eps is never included):
+      - Prior 4 quarters EPS history (strictly before call_date)
+      - Analyst EPS consensus for this quarter (from row["consensus_eps"] if present)
+      - Company sector
+      - Stock performance YTD (Jan 1 of call year → call_date)
+
+    Network calls are minimized:
+      - Sector and EPS history: one yfinance call per unique ticker
+      - YTD price: one yfinance call per unique (ticker, year)
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        logger.warning("yfinance not available — context blocks will be empty")
+        return {}
+
+    # Collect unique tickers and (ticker, year) pairs
+    tickers = {r["ticker"] for r in rows}
+    ticker_years = {(r["ticker"], r["date"][:4]) for r in rows}
+
+    # Cache: ticker → {"sector": str, "eps_history": list of (date, eps)}
+    ticker_cache: dict[str, dict] = {}
+
+    logger.info("Fetching context metadata for %d unique tickers …", len(tickers))
+    for ticker in sorted(tickers):
+        cache_entry: dict = {"sector": None, "eps_history": []}
+        try:
+            t = yf.Ticker(ticker)
+
+            # Sector
+            try:
+                info = t.fast_info
+                # fast_info doesn't have sector; fall back to full info
+                sector = None
+                try:
+                    full_info = t.info
+                    sector = full_info.get("sector") or full_info.get("industryDisp")
+                except Exception:
+                    pass
+                cache_entry["sector"] = sector
+            except Exception:
+                pass
+
+            # EPS history (all historical reported EPS dates)
+            try:
+                ed = t.get_earnings_dates(limit=20)
+                if ed is not None and not ed.empty:
+                    ed_clean = ed.dropna(subset=["Reported EPS"]).copy()
+                    # Normalise to tz-naive UTC dates for comparisons
+                    idx = pd.DatetimeIndex(ed_clean.index)
+                    if idx.tz is not None:
+                        idx = idx.tz_convert("UTC").tz_localize(None)
+                    ed_clean.index = idx
+                    ed_clean = ed_clean.sort_index(ascending=False)  # newest first
+                    cache_entry["eps_history"] = list(
+                        zip(ed_clean.index.tolist(),
+                            ed_clean["Reported EPS"].tolist())
+                    )
+            except Exception as exc:
+                logger.debug("EPS history error for %s: %s", ticker, exc)
+
+        except Exception as exc:
+            logger.debug("Ticker fetch error for %s: %s", ticker, exc)
+
+        ticker_cache[ticker] = cache_entry
+        logger.debug("Cached %s: sector=%s, eps_quarters=%d",
+                     ticker, cache_entry["sector"], len(cache_entry["eps_history"]))
+
+    # Cache: (ticker, year_str) → ytd_pct (float or None)
+    ytd_cache: dict[tuple, Optional[float]] = {}
+
+    logger.info("Fetching YTD price data for %d ticker-year pairs …", len(ticker_years))
+    for ticker, year_str in sorted(ticker_years):
+        try:
+            year_start = f"{year_str}-01-01"
+            # Fetch through end of year + buffer so we get all trading days
+            year_end   = f"{int(year_str) + 1}-01-15"
+            hist = yf.download(ticker, start=year_start, end=year_end,
+                               progress=False, auto_adjust=True)
+            if hist.empty or "Close" not in hist.columns:
+                ytd_cache[(ticker, year_str)] = None
+                continue
+            if isinstance(hist.columns, pd.MultiIndex):
+                hist.columns = hist.columns.get_level_values(0)
+            closes = hist["Close"].dropna()
+            # Store the full price series so we can slice per call_date
+            ytd_cache[(ticker, year_str)] = closes
+        except Exception as exc:
+            logger.debug("YTD fetch error for %s %s: %s", ticker, year_str, exc)
+            ytd_cache[(ticker, year_str)] = None
+
+    # Assemble one context block per row
+    result: dict[tuple, str] = {}
+    for row in rows:
+        ticker   = row["ticker"]
+        date_str = row["date"][:10]          # "YYYY-MM-DD"
+        year_str = date_str[:4]
+        call_ts  = pd.Timestamp(date_str)
+        consensus_eps = row.get("consensus_eps")
+
+        parts: list[str] = []
+        cache = ticker_cache.get(ticker, {})
+
+        # 1. Prior 4 quarters EPS (strictly before call_date)
+        history = cache.get("eps_history", [])
+        prior = [(dt, eps) for dt, eps in history
+                 if pd.Timestamp(dt) < call_ts][:4]
+        if prior:
+            eps_strs = []
+            for dt, eps in prior:
+                ts = pd.Timestamp(dt)
+                q  = (ts.month - 1) // 3 + 1
+                eps_strs.append(f"Q{q} {ts.year}: ${float(eps):.2f}")
+            parts.append(f"- Prior 4 quarters EPS: {', '.join(eps_strs)}")
+
+        # 2. Analyst consensus (no leakage: this is the estimate, NOT reported)
+        if consensus_eps is not None:
+            try:
+                parts.append(
+                    f"- Analyst EPS consensus this quarter: ${float(consensus_eps):.2f}"
+                )
+            except (TypeError, ValueError):
+                pass
+
+        # 3. Sector
+        sector = cache.get("sector")
+        if sector:
+            parts.append(f"- Sector: {sector}")
+
+        # 4. YTD stock performance (Jan 1 → call_date)
+        price_series = ytd_cache.get((ticker, year_str))
+        if price_series is not None and hasattr(price_series, "__len__") and len(price_series) >= 2:
+            # Slice up to (and including) call_date
+            prior_prices = price_series[price_series.index <= call_ts]
+            if len(prior_prices) >= 2:
+                ytd_ret = (float(prior_prices.iloc[-1]) - float(prior_prices.iloc[0])) \
+                          / float(prior_prices.iloc[0]) * 100
+                sign = "+" if ytd_ret >= 0 else ""
+                parts.append(f"- Stock performance YTD: {sign}{ytd_ret:.1f}%")
+
+        if parts:
+            result[(ticker, date_str)] = "Context:\n" + "\n".join(parts)
+        else:
+            result[(ticker, date_str)] = ""
+
+    logger.info("Context blocks assembled: %d / %d non-empty",
+                sum(1 for v in result.values() if v), len(result))
+    return result

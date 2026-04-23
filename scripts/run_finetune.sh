@@ -19,16 +19,24 @@
 set -euo pipefail
 
 TASK="${1:-direction}"
+MIN_EPS_MARGIN="${2:-0}"
 EXTRA_ARGS=""
 case "$TASK" in
     direction) PAIRS=data/pairs_direction.jsonl    ;;
-    surprise)  PAIRS=data/pairs_eps_surprise.jsonl
-               EXTRA_ARGS="--balance-test"          ;;
-    *) echo "Usage: sbatch scripts/run_finetune.sh [direction|surprise]"; exit 1 ;;
+    surprise)  PAIRS=data/pairs_eps_surprise.jsonl ;;
+    *) echo "Usage: sbatch scripts/run_finetune.sh [direction|surprise] [min-eps-margin]"; exit 1 ;;
 esac
+
+if [[ "$MIN_EPS_MARGIN" != "0" ]]; then
+    EXTRA_ARGS="$EXTRA_ARGS --min-eps-margin $MIN_EPS_MARGIN"
+    OUT_DIR="outputs/${TASK}_margin${MIN_EPS_MARGIN}"
+else
+    OUT_DIR="outputs/$TASK"
+fi
 
 echo "Job ID: $SLURM_JOB_ID"
 echo "Task:   $TASK"
+echo "EPS min:$MIN_EPS_MARGIN"
 echo "Pairs:  $PAIRS"
 echo "GPU:    $(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)"
 echo "Start:  $(date)"
@@ -44,7 +52,7 @@ mkdir -p logs outputs
 
 python -m src.models.finetune \
     --pairs "$PAIRS" \
-    --out   "outputs/$TASK" \
+    --out   "$OUT_DIR" \
     $EXTRA_ARGS
 
 echo "End:    $(date)"

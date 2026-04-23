@@ -46,8 +46,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.finetune import load_pairs, balance_classes, head_tail_truncate
 from models.evaluate import (
     TASK_LABELS, detect_task, chrono_test_split,
-    first_subword_id, load_model, bootstrap_ci,
+    first_subword_id, load_model, bootstrap_ci, filter_by_eps_margin,
 )
+from data.loader import fetch_context_blocks_batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -131,11 +132,12 @@ def select_shots(train_rows: list[dict], n_shots: int,
 
 def build_prompt(system: str, shots: list[dict], tokenizer,
                  excerpt_tokens: int, test_input: str,
-                 max_length: int) -> str:
+                 max_length: int,
+                 context_block: str = "") -> str:
     """
     Assemble the full k-shot prompt ending with "Answer:".
 
-    Layout:
+    Layout (with optional context_block):
         {system}
 
         Below are {k} examples with known outcomes.
@@ -147,6 +149,7 @@ def build_prompt(system: str, shots: list[dict], tokenizer,
         ...
 
         Now analyze the following:
+        {context_block}        ← optional non-transcript features
         Transcript: {test transcript, head+tail truncated to fit budget}
         Answer:
     """
@@ -166,7 +169,9 @@ def build_prompt(system: str, shots: list[dict], tokenizer,
             f"Answer: {row['output']}\n"
         )
 
-    test_header = "\nNow analyze the following:\nTranscript: "
+    # Context block (non-transcript numerical features) injected before transcript
+    ctx_section = f"\n{context_block}\n" if context_block else ""
+    test_header = f"\nNow analyze the following:{ctx_section}\nTranscript: "
     suffix      = "\nAnswer:"
 
     # Compute remaining token budget for the test transcript
@@ -228,14 +233,22 @@ def main():
     ap.add_argument("--excerpt-tokens", type=int,  default=200,
                     help="Token budget per demonstration excerpt (default 200)")
     ap.add_argument("--max-length",     type=int,  default=2048)
+    ap.add_argument("--min-eps-margin", type=float, default=0.0,
+                    help=("For EPS surprise, drop rows with abs(reported_eps - "
+                          "consensus_eps) below this value before splitting."))
     ap.add_argument("--balance-test",   action="store_true",
                     help="Subsample majority class in test to match minority")
     ap.add_argument("--seed",           type=int,  default=42)
+    ap.add_argument("--context",        action="store_true",
+                    help=("Prepend a non-transcript data block to each test prompt: "
+                          "prior 4Q EPS, analyst consensus, sector, YTD performance. "
+                          "Fetched via yfinance at eval time. No reported EPS included."))
     args = ap.parse_args()
 
     from transformers import AutoTokenizer
 
     rows = load_pairs(args.pairs)
+    rows = filter_by_eps_margin(rows, args.min_eps_margin)
     task = detect_task(rows)
     logger.info("Task: %s  |  total pairs: %d", task, len(rows))
 
@@ -262,17 +275,27 @@ def main():
 
     system = TASK_SYSTEMS[task]
 
+    # Pre-fetch context blocks (one batch of yfinance calls) if requested
+    context_map: dict = {}
+    if args.context:
+        logger.info("Fetching non-transcript context blocks via yfinance …")
+        context_map = fetch_context_blocks_batch(test)
+        n_filled = sum(1 for v in context_map.values() if v)
+        logger.info("Context blocks: %d / %d non-empty", n_filled, len(test))
+
     logger.info("Building %d prompts …", len(test))
     prompts, labels = [], []
     for row in test:
+        ctx_block = context_map.get((row["ticker"], row["date"][:10]), "")
         prompt = build_prompt(
             system, shots, tokenizer,
             args.excerpt_tokens, row["input"], args.max_length,
+            context_block=ctx_block,
         )
         prompts.append(prompt)
         labels.append(int(row["output"].strip().lower() == pos_word))
 
-    logger.info("─── Sample prompt (first 800 chars) ───\n%s\n───", prompts[0][:800])
+    logger.info("─── Sample prompt (first 1000 chars) ───\n%s\n───", prompts[0][:1000])
 
     model = load_model(args.base_model, args.adapter)
     logger.info("Running inference on %d test examples …", len(prompts))
@@ -292,9 +315,12 @@ def main():
         "pairs_file":        str(args.pairs),
         "adapter":           args.adapter,
         "n_shots":           args.n_shots,
+        "seed":              args.seed,
         "cot":               False,
+        "context":           bool(args.context),
         "excerpt_tokens":    args.excerpt_tokens,
         "balanced_test":     bool(args.balance_test),
+        "min_eps_margin":    float(args.min_eps_margin),
         "n_test":            int(len(y_true)),
         "accuracy":          float(acc),
         "balanced_accuracy": float(bacc),

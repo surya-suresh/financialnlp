@@ -106,11 +106,13 @@ def build_pairs(df: pd.DataFrame, out_dir: str) -> None:
 
         # --- EPS surprise ---
         if not pd.isna(row.label_eps_surprise):
+            eps_margin = abs(float(row.reported_eps) - float(row.consensus_eps))
             eps_pairs.append({
                 "ticker":        row.ticker,
                 "date":          str(row.date)[:10],
                 "reported_eps":  row.reported_eps,
                 "consensus_eps": row.consensus_eps,
+                "eps_margin":    eps_margin,
                 "input":         _make_prompt(_EPS_SYSTEM, transcript),
                 "output":        _eps_label(int(row.label_eps_surprise)),
             })
