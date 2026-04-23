@@ -1,0 +1,17 @@
+{
+  "task": "direction",
+  "pairs_file": "data/pairs_direction.jsonl",
+  "adapter": null,
+  "n_shots": 3,
+  "cot": true,
+  "max_new_tokens": 150,
+  "excerpt_tokens": 200,
+  "balanced_test": false,
+  "n_test": 197,
+  "accuracy": 0.583756345177665,
+  "balanced_accuracy": 0.5112179487179487,
+  "auc": 0.5496794871794871,
+  "auc_ci_95": [0.4673124161952651, 0.6352434610969621],
+  "class_balance": {"up": 117, "down": 80},
+  "shots": [{"ticker": "OKE", "date": "2025-04-30", "output": "down"}, {"ticker": "PTC", "date": "2025-04-30", "output": "up"}, {"ticker": "QCOM", "date": "2025-04-30", "output": "down"}]
+}

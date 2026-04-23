@@ -1,0 +1,17 @@
+{
+  "task": "surprise",
+  "pairs_file": "data/pairs_eps_surprise.jsonl",
+  "adapter": null,
+  "n_shots": 3,
+  "cot": true,
+  "max_new_tokens": 150,
+  "excerpt_tokens": 200,
+  "balanced_test": true,
+  "n_test": 38,
+  "accuracy": 0.631578947368421,
+  "balanced_accuracy": 0.631578947368421,
+  "auc": 0.6371191135734071,
+  "auc_ci_95": [0.4596137820512821, 0.8116824990865912],
+  "class_balance": {"beat": 19, "miss": 19},
+  "shots": [{"ticker": "CDW", "date": "2024-10-30", "output": "miss"}, {"ticker": "ADP", "date": "2024-10-30", "output": "beat"}, {"ticker": "CAT", "date": "2024-10-30", "output": "miss"}]
+}
