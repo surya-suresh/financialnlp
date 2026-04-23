@@ -1,0 +1,17 @@
+{
+  "task": "surprise",
+  "pairs_file": "data/pairs_eps_surprise.jsonl",
+  "adapter": null,
+  "n_shots": 3,
+  "cot": true,
+  "max_new_tokens": 250,
+  "excerpt_tokens": 350,
+  "balanced_test": true,
+  "n_test": 38,
+  "accuracy": 0.47368421052631576,
+  "balanced_accuracy": 0.4736842105263158,
+  "auc": 0.40997229916897504,
+  "auc_ci_95": [0.2300552398989899, 0.5944871794871794],
+  "class_balance": {"beat": 19, "miss": 19},
+  "shots": [{"ticker": "CME", "date": "2024-07-24", "output": "beat"}, {"ticker": "BG", "date": "2024-07-31", "output": "miss"}, {"ticker": "NTAP", "date": "2024-08-28", "output": "beat"}]
+}

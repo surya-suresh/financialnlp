@@ -43,8 +43,8 @@ case "$TASK" in
 esac
 
 case "$MODE" in
-    base)    OUT="outputs/${TASK}/results_prompt_base.json" ;;
-    adapter) OUT="outputs/${TASK}/results_prompt_ft.json"   ;;
+    base)    OUT="outputs/${TASK}/results_prompt_base_v3.json" ;;
+    adapter) OUT="outputs/${TASK}/results_prompt_ft_v3.json"   ;;
     *)
         echo "MODE must be 'base' or 'adapter'"
         exit 1
@@ -68,16 +68,18 @@ mkdir -p logs outputs/"$TASK"
 
 if [[ "$MODE" == "adapter" ]]; then
     python -m src.models.prompt_eval \
-        --pairs   "$PAIRS" \
-        --adapter "$ADAPTER" \
-        --out     "$OUT" \
-        --n-shots 3 \
+        --pairs          "$PAIRS" \
+        --adapter        "$ADAPTER" \
+        --out            "$OUT" \
+        --n-shots        3 \
+        --excerpt-tokens 200 \
         $EXTRA_ARGS
 else
     python -m src.models.prompt_eval \
-        --pairs "$PAIRS" \
-        --out   "$OUT" \
-        --n-shots 3 \
+        --pairs          "$PAIRS" \
+        --out            "$OUT" \
+        --n-shots        3 \
+        --excerpt-tokens 200 \
         $EXTRA_ARGS
 fi
 

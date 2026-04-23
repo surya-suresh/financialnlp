@@ -1,0 +1,17 @@
+{
+  "task": "direction",
+  "pairs_file": "data/pairs_direction.jsonl",
+  "adapter": null,
+  "n_shots": 3,
+  "cot": true,
+  "max_new_tokens": 250,
+  "excerpt_tokens": 350,
+  "balanced_test": false,
+  "n_test": 197,
+  "accuracy": 0.583756345177665,
+  "balanced_accuracy": 0.5369123931623931,
+  "auc": 0.5613247863247863,
+  "auc_ci_95": [0.48090860109717876, 0.639765064464362],
+  "class_balance": {"up": 117, "down": 80},
+  "shots": [{"ticker": "RHI", "date": "2024-10-22", "output": "up"}, {"ticker": "NTAP", "date": "2024-08-28", "output": "down"}, {"ticker": "AOS", "date": "2024-07-23", "output": "up"}]
+}
