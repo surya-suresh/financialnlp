@@ -152,13 +152,16 @@ def select_transcript_view(transcript: str, view: str) -> tuple[str, float | Non
     raise ValueError(f"Unknown transcript view: {view}")
 
 
-def build_view_prompt_ids(tokenizer, row: dict, view: str, max_length: int) -> list[int]:
+def build_view_prompt_ids(tokenizer, row: dict, view: str, max_length: int,
+                          rag_prefix: str = "") -> list[int]:
     """Build token ids for one transcript view while preserving Answer: at the end."""
     prefix = prompt_prefix(row["input"])
     transcript = extract_transcript(row["input"])
     view_text, head_ratio = select_transcript_view(transcript, view)
 
-    before = f"{prefix}\n\nTranscript:\n" if prefix else "Transcript:\n"
+    rag_section = f"{rag_prefix}\n\n" if rag_prefix else ""
+    before = (f"{rag_section}{prefix}\n\nTranscript:\n" if prefix
+              else f"{rag_section}Transcript:\n")
     suffix = "\n\nAnswer:"
     framework_len = len(tokenizer(before + suffix, add_special_tokens=False)["input_ids"])
     transcript_budget = max(max_length - framework_len, 64)
@@ -208,7 +211,8 @@ def bootstrap_ci(y_true, y_score, metric_fn, n_boot=1000, seed=0):
 
 
 @torch.no_grad()
-def predict(model, tokenizer, rows, task, max_length, views: list[str]):
+def predict(model, tokenizer, rows, task, max_length, views: list[str],
+            retriever=None, rag_top_k: int = 2, rag_chars_per_passage: int = 800):
     pos_word, neg_word = TASK_LABELS[task]
     pos_id = first_subword_id(tokenizer, pos_word)
     neg_id = first_subword_id(tokenizer, neg_word)
@@ -216,8 +220,19 @@ def predict(model, tokenizer, rows, task, max_length, views: list[str]):
     view_scores = {view: [] for view in views}
     y_true = []
     for i, row in enumerate(rows):
+        rag_prefix = ""
+        if retriever is not None:
+            from retrieval.retriever import build_rag_prefix
+            transcript = extract_transcript(row["input"])
+            passages   = retriever.retrieve(
+                row["ticker"], row["date"], transcript, k=rag_top_k,
+            )
+            rag_prefix = build_rag_prefix(
+                passages, max_chars_per_passage=rag_chars_per_passage,
+            )
         for view in views:
-            ids = build_view_prompt_ids(tokenizer, row, view, max_length)
+            ids = build_view_prompt_ids(tokenizer, row, view, max_length,
+                                        rag_prefix=rag_prefix)
             enc = {
                 "input_ids":      torch.tensor([ids],            device=model.device),
                 "attention_mask": torch.tensor([[1] * len(ids)], device=model.device),
@@ -238,6 +253,42 @@ def predict(model, tokenizer, rows, task, max_length, views: list[str]):
     return y_true_arr, ensemble_prob, per_view_prob
 
 
+def _load_tokenizer(tok_src: str):
+    """
+    Load tokenizer with exponential-backoff retry for transient NFS ESTALE
+    errors (errno 116 — "Stale file handle") common on OSC/HPC shared
+    filesystems when reading tokenizer JSON files.
+
+    Retries up to 3 times with delays of 10 s, 20 s, 30 s before re-raising.
+    """
+    import time
+    last_exc: Exception = RuntimeError("unreachable")
+    for attempt in range(3):
+        try:
+            from transformers import AutoTokenizer
+            tok = AutoTokenizer.from_pretrained(tok_src, trust_remote_code=True)
+            if tok.pad_token is None:
+                tok.pad_token = tok.eos_token
+            return tok
+        except Exception as exc:
+            is_stale = (
+                "Stale file handle" in str(exc)
+                or getattr(exc, "errno", None) == 116
+                or "os error 116" in str(exc).lower()
+            )
+            if is_stale and attempt < 2:
+                delay = 10 * (attempt + 1)
+                logger.warning(
+                    "Tokenizer load attempt %d/3 failed (stale file handle): %s"
+                    " — retrying in %d s …", attempt + 1, exc, delay,
+                )
+                last_exc = exc
+                time.sleep(delay)
+            else:
+                raise
+    raise last_exc
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pairs",      type=Path, required=True)
@@ -256,6 +307,14 @@ def main():
     ap.add_argument("--balance-test", action="store_true",
                     help="Subsample majority class in test to match minority")
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--rag",                action="store_true",
+                    help="Enable retrieval-augmented generation: prepend prior transcripts "
+                         "from the same company to the prompt before inference.")
+    ap.add_argument("--rag-top-k",          type=int, default=2,
+                    help="Number of passages to retrieve per example (default 2).")
+    ap.add_argument("--rag-context-tokens", type=int, default=400,
+                    help="Total token budget reserved for the RAG context block "
+                         "(approx; default 400).  Each passage gets an equal share.")
     args = ap.parse_args()
 
     from transformers import AutoTokenizer
@@ -272,15 +331,24 @@ def main():
                     dict(Counter(r["output"] for r in test)), len(test))
 
     tok_src   = args.adapter or args.base_model
-    tokenizer = AutoTokenizer.from_pretrained(tok_src, trust_remote_code=True)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer = _load_tokenizer(tok_src)
+
+    retriever = None
+    if args.rag:
+        from retrieval.retriever import TranscriptRetriever
+        logger.info("Building RAG retriever from training split …")
+        retriever = TranscriptRetriever.from_pairs(rows, train_ratio=0.9)
+        logger.info("RAG retriever ready (corpus=%d docs).", len(retriever.corpus))
 
     model = load_model(args.base_model, args.adapter)
     views = [v.strip() for v in args.views.split(",") if v.strip()]
     logger.info("Transcript views: %s", views)
+    rag_chars = max(200, args.rag_context_tokens * 4 // max(args.rag_top_k, 1))
     y_true, y_prob, per_view_prob = predict(
         model, tokenizer, test, task, args.max_length, views,
+        retriever=retriever,
+        rag_top_k=args.rag_top_k,
+        rag_chars_per_passage=rag_chars,
     )
     y_pred = (y_prob >= 0.5).astype(int)
 
@@ -307,12 +375,15 @@ def main():
         }
 
     results = {
-        "task":              task,
-        "pairs_file":        str(args.pairs),
-        "adapter":           args.adapter,
-        "balanced_test":     bool(args.balance_test),
-        "min_eps_margin":    float(args.min_eps_margin),
-        "views":             views,
+        "task":               task,
+        "pairs_file":         str(args.pairs),
+        "adapter":            args.adapter,
+        "rag":                bool(args.rag),
+        "rag_top_k":          args.rag_top_k if args.rag else 0,
+        "rag_context_tokens": args.rag_context_tokens if args.rag else 0,
+        "balanced_test":      bool(args.balance_test),
+        "min_eps_margin":     float(args.min_eps_margin),
+        "views":              views,
         "n_test":            int(len(y_true)),
         "accuracy":          float(acc),
         "balanced_accuracy": float(bacc),

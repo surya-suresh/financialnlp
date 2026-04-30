@@ -18,7 +18,10 @@
       "Read(//opt/**)",
       "Bash(pip list:*)",
       "Bash(conda list:*)",
-      "Bash(/opt/homebrew/bin/tectonic proposal.tex)"
+      "Bash(/opt/homebrew/bin/tectonic proposal.tex)",
+      "Bash(pip3 install *)",
+      "Bash(python3 -c \"import numpy; print\\(numpy.__version__\\)\")",
+      "WebSearch"
     ]
   }
 }

@@ -1,0 +1,32 @@
+{
+  "task": "direction",
+  "pairs_file": "data/pairs_direction.jsonl",
+  "adapter": null,
+  "rag": true,
+  "rag_top_k": 2,
+  "rag_context_tokens": 400,
+  "balanced_test": false,
+  "min_eps_margin": 0.0,
+  "views": [
+    "head_tail"
+  ],
+  "n_test": 197,
+  "accuracy": 0.5939086294416244,
+  "balanced_accuracy": 0.5355769230769231,
+  "auc": 0.4916666666666667,
+  "auc_ci_95": [
+    0.41017782318447327,
+    0.5714337654971469
+  ],
+  "per_view": {
+    "head_tail": {
+      "accuracy": 0.5939086294416244,
+      "balanced_accuracy": 0.5355769230769231,
+      "auc": 0.4916666666666667
+    }
+  },
+  "class_balance": {
+    "up": 117,
+    "down": 80
+  }
+}

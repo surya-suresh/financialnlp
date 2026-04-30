@@ -238,7 +238,7 @@ def build_shot_excerpts(shots: list[dict], tokenizer, excerpt_tokens: int) -> li
 def build_prompt(system: str, shots: list[dict], shot_excerpts: list[str],
                  shot_context_blocks: list[str],
                  tokenizer, test_input: str, max_length: int,
-                 context_block: str = "") -> str:
+                 context_block: str = "", rag_prefix: str = "") -> str:
     """
     Assemble the full k-shot prompt ending with "Answer:".
 
@@ -255,7 +255,9 @@ def build_prompt(system: str, shots: list[dict], shot_excerpts: list[str],
     causes an overrun — ensuring "Answer:" is always the final token sequence
     and the logit is read at the correct position.
 
-    Layout (with context blocks):
+    Layout (with RAG and context blocks):
+        {rag_prefix}            ← retrieved prior transcripts (omitted when empty)
+
         {system}
 
         Below are {k} examples with known outcomes.
@@ -272,7 +274,9 @@ def build_prompt(system: str, shots: list[dict], shot_excerpts: list[str],
         Transcript: {extractive excerpt, budget = remaining tokens}
         Answer:
     """
+    rag_section = f"{rag_prefix}\n\n" if rag_prefix else ""
     header = (
+        f"{rag_section}"
         f"{system}\n\n"
         f"Below are {len(shots)} examples with known outcomes.\n"
     )
@@ -364,6 +368,42 @@ def predict(model, tokenizer, prompts: list[str], labels: list[int],
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+def _load_tokenizer(tok_src: str):
+    """
+    Load tokenizer with exponential-backoff retry for transient NFS ESTALE
+    errors (errno 116 — "Stale file handle") common on OSC/HPC shared
+    filesystems when reading tokenizer JSON files.
+
+    Retries up to 3 times with delays of 10 s, 20 s, 30 s before re-raising.
+    """
+    import time
+    last_exc: Exception = RuntimeError("unreachable")
+    for attempt in range(3):
+        try:
+            from transformers import AutoTokenizer
+            tok = AutoTokenizer.from_pretrained(tok_src, trust_remote_code=True)
+            if tok.pad_token is None:
+                tok.pad_token = tok.eos_token
+            return tok
+        except Exception as exc:
+            is_stale = (
+                "Stale file handle" in str(exc)
+                or getattr(exc, "errno", None) == 116
+                or "os error 116" in str(exc).lower()
+            )
+            if is_stale and attempt < 2:
+                delay = 10 * (attempt + 1)
+                logger.warning(
+                    "Tokenizer load attempt %d/3 failed (stale file handle): %s"
+                    " — retrying in %d s …", attempt + 1, exc, delay,
+                )
+                last_exc = exc
+                time.sleep(delay)
+            else:
+                raise
+    raise last_exc
+
+
 def main():
     ap = argparse.ArgumentParser(description="4-shot few-shot prompting evaluation")
     ap.add_argument("--pairs",          type=Path, required=True,
@@ -387,6 +427,14 @@ def main():
                     help=("Prepend a non-transcript data block to each test prompt: "
                           "prior 4Q EPS, analyst consensus, sector, YTD performance. "
                           "Fetched via yfinance at eval time. No reported EPS included."))
+    ap.add_argument("--rag",                action="store_true",
+                    help="Enable retrieval-augmented generation: prepend prior transcripts "
+                         "from the same company before the system prompt and few-shot block.")
+    ap.add_argument("--rag-top-k",          type=int, default=2,
+                    help="Number of passages to retrieve per example (default 2).")
+    ap.add_argument("--rag-context-tokens", type=int, default=400,
+                    help="Total token budget reserved for the RAG context block "
+                         "(approx; default 400).  Each passage gets an equal share.")
     args = ap.parse_args()
 
     from transformers import AutoTokenizer
@@ -413,11 +461,21 @@ def main():
     )
 
     tok_src   = args.adapter or args.base_model
-    tokenizer = AutoTokenizer.from_pretrained(tok_src, trust_remote_code=True)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer = _load_tokenizer(tok_src)
 
     system = TASK_SYSTEMS[task]
+
+    # Build RAG retriever from training split (once; reused for every test example).
+    retriever             = None
+    rag_chars_per_passage = 800
+    if args.rag:
+        from retrieval.retriever import TranscriptRetriever
+        logger.info("Building RAG retriever from training split …")
+        retriever = TranscriptRetriever.from_pairs(rows, train_ratio=0.9)
+        rag_chars_per_passage = max(
+            200, args.rag_context_tokens * 4 // max(args.rag_top_k, 1)
+        )
+        logger.info("RAG retriever ready (corpus=%d docs).", len(retriever.corpus))
 
     # Build shot excerpts once — avoids re-tokenising the same transcripts
     # for every test example inside the prompt-building loop.
@@ -441,10 +499,21 @@ def main():
     prompts, labels = [], []
     for row in test:
         ctx_block = context_map.get((row["ticker"], row["date"][:10]), "")
+        rag_prefix_str = ""
+        if retriever is not None:
+            from retrieval.retriever import build_rag_prefix
+            transcript     = extract_transcript(row["input"])
+            passages       = retriever.retrieve(
+                row["ticker"], row["date"], transcript, k=args.rag_top_k,
+            )
+            rag_prefix_str = build_rag_prefix(
+                passages, max_chars_per_passage=rag_chars_per_passage,
+            )
         prompt = build_prompt(
             system, shots, shot_excerpts, shot_context_blocks, tokenizer,
             row["input"], args.max_length,
             context_block=ctx_block,
+            rag_prefix=rag_prefix_str,
         )
         prompts.append(prompt)
         labels.append(int(row["output"].strip().lower() == pos_word))
@@ -465,17 +534,20 @@ def main():
     auc_lo, auc_hi = bootstrap_ci(y_true, y_prob, roc_auc_score)
 
     results = {
-        "task":              task,
-        "pairs_file":        str(args.pairs),
-        "adapter":           args.adapter,
-        "n_shots":           args.n_shots,
-        "seed":              args.seed,
-        "max_length":        args.max_length,
-        "cot":               False,
-        "context":           bool(args.context),
-        "excerpt_tokens":    args.excerpt_tokens,
-        "balanced_test":     bool(args.balance_test),
-        "min_eps_margin":    float(args.min_eps_margin),
+        "task":               task,
+        "pairs_file":         str(args.pairs),
+        "adapter":            args.adapter,
+        "n_shots":            args.n_shots,
+        "seed":               args.seed,
+        "max_length":         args.max_length,
+        "cot":                False,
+        "context":            bool(args.context),
+        "rag":                bool(args.rag),
+        "rag_top_k":          args.rag_top_k if args.rag else 0,
+        "rag_context_tokens": args.rag_context_tokens if args.rag else 0,
+        "excerpt_tokens":     args.excerpt_tokens,
+        "balanced_test":      bool(args.balance_test),
+        "min_eps_margin":     float(args.min_eps_margin),
         "n_test":            int(len(y_true)),
         "accuracy":          float(acc),
         "balanced_accuracy": float(bacc),

@@ -1,0 +1,50 @@
+{
+  "task": "surprise",
+  "pairs_file": "data/pairs_eps_surprise.jsonl",
+  "adapter": "outputs/surprise/adapter",
+  "n_shots": 4,
+  "seed": 42,
+  "max_length": 3072,
+  "cot": false,
+  "context": false,
+  "rag": true,
+  "rag_top_k": 2,
+  "rag_context_tokens": 400,
+  "excerpt_tokens": 150,
+  "balanced_test": false,
+  "min_eps_margin": 0.0,
+  "n_test": 83,
+  "accuracy": 0.7349397590361446,
+  "balanced_accuracy": 0.6245888157894737,
+  "auc": 0.7224506578947368,
+  "auc_ci_95": [
+    0.5952214520676692,
+    0.835639400921659
+  ],
+  "class_balance": {
+    "beat": 64,
+    "miss": 19
+  },
+  "shots": [
+    {
+      "ticker": "SYF",
+      "date": "2024-07-17",
+      "output": "beat"
+    },
+    {
+      "ticker": "ADM",
+      "date": "2024-07-30",
+      "output": "miss"
+    },
+    {
+      "ticker": "MPWR",
+      "date": "2024-08-01",
+      "output": "beat"
+    },
+    {
+      "ticker": "SHW",
+      "date": "2024-10-22",
+      "output": "miss"
+    }
+  ]
+}

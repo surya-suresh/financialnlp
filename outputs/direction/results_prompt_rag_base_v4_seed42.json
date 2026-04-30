@@ -1,0 +1,50 @@
+{
+  "task": "direction",
+  "pairs_file": "data/pairs_direction.jsonl",
+  "adapter": null,
+  "n_shots": 4,
+  "seed": 42,
+  "max_length": 3072,
+  "cot": false,
+  "context": false,
+  "rag": true,
+  "rag_top_k": 2,
+  "rag_context_tokens": 400,
+  "excerpt_tokens": 150,
+  "balanced_test": false,
+  "min_eps_margin": 0.0,
+  "n_test": 197,
+  "accuracy": 0.583756345177665,
+  "balanced_accuracy": 0.517147435897436,
+  "auc": 0.5318376068376068,
+  "auc_ci_95": [
+    0.44744729270896355,
+    0.6114410841027574
+  ],
+  "class_balance": {
+    "up": 117,
+    "down": 80
+  },
+  "shots": [
+    {
+      "ticker": "CINF",
+      "date": "2024-10-25",
+      "output": "up"
+    },
+    {
+      "ticker": "KR",
+      "date": "2024-06-20",
+      "output": "down"
+    },
+    {
+      "ticker": "JPM",
+      "date": "2025-01-15",
+      "output": "up"
+    },
+    {
+      "ticker": "PNC",
+      "date": "2025-04-15",
+      "output": "down"
+    }
+  ]
+}

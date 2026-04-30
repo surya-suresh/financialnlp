@@ -1,0 +1,32 @@
+{
+  "task": "surprise",
+  "pairs_file": "data/pairs_eps_surprise.jsonl",
+  "adapter": null,
+  "rag": true,
+  "rag_top_k": 2,
+  "rag_context_tokens": 400,
+  "balanced_test": false,
+  "min_eps_margin": 0.0,
+  "views": [
+    "head_tail"
+  ],
+  "n_test": 83,
+  "accuracy": 0.7951807228915663,
+  "balanced_accuracy": 0.6266447368421053,
+  "auc": 0.6800986842105263,
+  "auc_ci_95": [
+    0.5307774500942493,
+    0.8216935929301297
+  ],
+  "per_view": {
+    "head_tail": {
+      "accuracy": 0.7951807228915663,
+      "balanced_accuracy": 0.6266447368421053,
+      "auc": 0.6800986842105263
+    }
+  },
+  "class_balance": {
+    "beat": 64,
+    "miss": 19
+  }
+}
