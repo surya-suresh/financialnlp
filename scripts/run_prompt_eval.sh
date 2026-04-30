@@ -31,14 +31,16 @@ ADAPTER_OVERRIDE="${6:-}"
 CONTEXT="${7:-false}"         # true | false  — prepend non-transcript data block
 EXTRA_ARGS=""
 
+SHARE_DIR="/fs/scratch/PAS3272/nkumar041/finance_nlp_share"
+
 case "$TASK" in
     direction)
-        PAIRS=data/pairs_direction.jsonl
-        ADAPTER=outputs/direction/adapter
+        PAIRS="${SHARE_DIR}/data/pairs_direction.jsonl"
+        ADAPTER="${SHARE_DIR}/outputs/direction/adapter"
         ;;
     surprise)
-        PAIRS=data/pairs_eps_surprise.jsonl
-        ADAPTER=outputs/surprise/adapter
+        PAIRS="${SHARE_DIR}/data/pairs_eps_surprise.jsonl"
+        ADAPTER="${SHARE_DIR}/outputs/surprise/adapter"
         ;;
     *)
         echo "Usage: sbatch scripts/run_prompt_eval.sh [direction|surprise] [base|adapter]"
@@ -58,8 +60,8 @@ if [[ "$CONTEXT" == "true" ]]; then
 fi
 
 case "$MODE" in
-    base)    OUT="outputs/${TASK}/results_prompt_base_v4_${OUT_SUFFIX}.json" ;;
-    adapter) OUT="outputs/${TASK}/results_prompt_ft_v4_${OUT_SUFFIX}.json"   ;;
+    base)    OUT="${SHARE_DIR}/outputs/${TASK}/results_prompt_base_v4_${OUT_SUFFIX}.json" ;;
+    adapter) OUT="${SHARE_DIR}/outputs/${TASK}/results_prompt_ft_v4_${OUT_SUFFIX}.json"   ;;
     *)
         echo "MODE must be 'base' or 'adapter'"
         exit 1
@@ -84,7 +86,7 @@ module load cudnn/8.7.0.84-11.8
 export LD_LIBRARY_PATH="$CUDA_HOME/extras/CUPTI/lib64:$LD_LIBRARY_PATH"
 source venv/bin/activate
 
-mkdir -p logs outputs/"$TASK"
+mkdir -p logs "${SHARE_DIR}/outputs/${TASK}"
 
 if [[ "$BALANCE_TEST" == "true" ]]; then
     EXTRA_ARGS="$EXTRA_ARGS --balance-test"
