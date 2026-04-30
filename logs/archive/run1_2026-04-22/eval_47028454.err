@@ -1,40 +1,0 @@
-00:16:40  INFO      Task=direction  test=197
-00:16:46  INFO      We will use 90% of the memory on device 0 for storing the model, and 10% for the buffer to avoid OOM. You can set `max_memory` in to a higher value to use more memory (at your own risk).
-Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:09<00:27,  9.01s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:17<00:17,  8.65s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:25<00:08,  8.44s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:33<00:00,  8.15s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:33<00:00,  8.33s/it]
-We detected that you are passing `past_key_values` as a tuple and this is deprecated and will be removed in v4.43. Please use an appropriate `Cache` class (https://huggingface.co/docs/transformers/v4.41.3/en/internal/generation_utils#transformers.Cache)
-00:17:26  INFO        10 / 197
-00:17:31  INFO        20 / 197
-00:17:36  INFO        30 / 197
-00:17:41  INFO        40 / 197
-00:17:46  INFO        50 / 197
-00:17:51  INFO        60 / 197
-00:17:56  INFO        70 / 197
-00:18:01  INFO        80 / 197
-00:18:06  INFO        90 / 197
-00:18:12  INFO        100 / 197
-00:18:17  INFO        110 / 197
-00:18:22  INFO        120 / 197
-00:18:27  INFO        130 / 197
-00:18:32  INFO        140 / 197
-00:18:37  INFO        150 / 197
-00:18:42  INFO        160 / 197
-00:18:47  INFO        170 / 197
-00:18:52  INFO        180 / 197
-00:18:57  INFO        190 / 197
-00:19:02  INFO      Results: {
-  "task": "direction",
-  "pairs_file": "data/pairs_direction.jsonl",
-  "adapter": null,
-  "n_test": 197,
-  "accuracy": 0.5685279187817259,
-  "balanced_accuracy": 0.5023504273504273,
-  "auc": 0.4932692307692308,
-  "auc_ci_95": [
-    0.4132951037571195,
-    0.5708723298559364
-  ],
-  "class_balance": {
-    "up": 117,
-    "down": 80
-  }
-}

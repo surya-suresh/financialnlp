@@ -1,22 +1,13 @@
 pandas>=1.5.0
 numpy>=1.23.0
 scikit-learn>=1.2.0
-# 4.44.x is the last release family that supports PyTorch 2.3.x (V100/sm_70).
-# 4.47+ requires PyTorch >= 2.4 which dropped sm_70 support.
 transformers==4.44.2
-# torch is installed separately in setup.sh with the cu118 index
-# to ensure sm_70 (V100) compatibility. Do not add torch here.
 yfinance>=0.2.18
-# lxml is needed by yfinance.get_earnings_dates (pandas.read_html).  Without it,
-# every EPS fetch silently fails and pairs_eps_surprise.jsonl ends up empty.
 lxml>=4.9.0
 datasets>=2.12.0
 huggingface_hub>=0.15.0
-# Pin to match transformers 4.44.x compatibility window
 accelerate==0.34.2
-# QLoRA finetuning dependencies
 peft==0.13.2
 bitsandbytes==0.43.3
-# Must match torch 2.3.1; triton>=3.0 removed triton.ops which bitsandbytes 0.43 imports.
 triton==2.3.1
 sentencepiece>=0.2.0

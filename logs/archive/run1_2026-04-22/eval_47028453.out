@@ -1,6 +1,0 @@
-Job ID: 47028453
-Task:   surprise   Mode: adapter
-Pairs:  data/pairs_eps_surprise.jsonl
-GPU:    Tesla V100-PCIE-16GB
-Start:  Wed Apr 22 02:21:29 EDT 2026
-End:    Wed Apr 22 02:22:32 EDT 2026

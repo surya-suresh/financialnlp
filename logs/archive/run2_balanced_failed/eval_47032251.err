@@ -1,26 +1,0 @@
-05:38:57  INFO      Task=surprise  test=84 (before balancing)
-05:38:57  INFO      Test balanced: {'miss': 17, 'beat': 17}  n=34
-05:39:01  INFO      We will use 90% of the memory on device 0 for storing the model, and 10% for the buffer to avoid OOM. You can set `max_memory` in to a higher value to use more memory (at your own risk).
-Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:15<00:46, 15.48s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:29<00:28, 14.34s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:44<00:14, 14.96s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:58<00:00, 14.55s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:58<00:00, 14.66s/it]
-We detected that you are passing `past_key_values` as a tuple and this is deprecated and will be removed in v4.43. Please use an appropriate `Cache` class (https://huggingface.co/docs/transformers/v4.41.3/en/internal/generation_utils#transformers.Cache)
-05:40:08  INFO        10 / 34
-05:40:13  INFO        20 / 34
-05:40:18  INFO        30 / 34
-05:40:21  INFO      Results: {
-  "task": "surprise",
-  "pairs_file": "data/pairs_eps_surprise.jsonl",
-  "adapter": null,
-  "balanced_test": true,
-  "n_test": 34,
-  "accuracy": 0.5588235294117647,
-  "balanced_accuracy": 0.5588235294117647,
-  "auc": 0.7024221453287197,
-  "auc_ci_95": [
-    0.5157735247208932,
-    0.8857936507936507
-  ],
-  "class_balance": {
-    "beat": 17,
-    "miss": 17
-  }
-}

@@ -1,24 +1,3 @@
-"""
-build_pairs.py — Export LLM finetuning pairs for both prediction tasks.
-
-Each output file is newline-delimited JSON (JSONL).  Every line is one
-training example with two keys:
-    "input"  — the prompt text fed to the model
-    "output" — the single-token label the model must produce
-
-Output files
-------------
-    <out_dir>/pairs_direction.jsonl      (transcript → "up" / "down")
-    <out_dir>/pairs_eps_surprise.jsonl   (transcript → "beat" / "miss")
-
-Each file contains only rows for which that particular label is available
-(yahooquery may not have EPS data for every ticker/date).
-
-Usage
------
-    python src/data/build_pairs.py [--max-samples N] [--out-dir DIR] [--synthetic]
-"""
-
 import argparse
 import json
 import logging
@@ -29,7 +8,8 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from data.loader import load_dataset, chronological_split
+from data.loader import load_dataset
+from data.preprocessor import strip_boilerplate
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,117 +18,102 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Prompt templates
-# ---------------------------------------------------------------------------
-
-_DIRECTION_SYSTEM = (
+DIRECTION_SYSTEM = (
     "You are a financial analyst. Read the earnings call transcript below "
     "and predict whether the stock price will go UP or DOWN over the three "
     "trading days following this call. Respond with exactly one word: "
     "'up' or 'down'."
 )
 
-_EPS_SYSTEM = (
+EPS_SYSTEM = (
     "You are a financial analyst. Read the earnings call transcript below "
     "and predict whether the company BEAT or MISSED analyst EPS consensus "
     "for this quarter. Respond with exactly one word: 'beat' or 'miss'."
 )
 
 
-def _make_prompt(system: str, transcript: str) -> str:
+def make_prompt(system: str, transcript: str) -> str:
     return f"{system}\n\nTranscript:\n{transcript.strip()}"
 
-
-# ---------------------------------------------------------------------------
-# Label converters
-# ---------------------------------------------------------------------------
-
-def _direction_label(value: int) -> str:
-    return "up" if value == 1 else "down"
-
-
-def _eps_label(value: int) -> str:
-    return "beat" if value == 1 else "miss"
-
-
-# ---------------------------------------------------------------------------
-# Writers
-# ---------------------------------------------------------------------------
 
 def write_jsonl(records: list[dict], path: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         for rec in records:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    logger.info("Wrote %d records → %s", len(records), path)
+    logger.info("Wrote %d records to %s", len(records), path)
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
-def build_pairs(df: pd.DataFrame, out_dir: str) -> None:
-    direction_pairs = []
-    eps_pairs       = []
+def build_pairs(df: pd.DataFrame, out_dir: str, task: str = "both") -> None:
+    direction_pairs, eps_pairs = [], []
+    raw_chars, clean_chars = 0, 0
 
     for row in df.itertuples(index=False):
-        transcript = row.text
+        transcript = strip_boilerplate(row.text)
+        if not transcript:
+            continue
+        raw_chars += len(row.text)
+        clean_chars += len(transcript)
 
-        # --- stock direction ---
         if not pd.isna(row.label_direction):
             direction_pairs.append({
                 "ticker": row.ticker,
-                "date":   str(row.date)[:10],
-                "input":  _make_prompt(_DIRECTION_SYSTEM, transcript),
-                "output": _direction_label(int(row.label_direction)),
+                "date": str(row.date)[:10],
+                "input": make_prompt(DIRECTION_SYSTEM, transcript),
+                "output": "up" if int(row.label_direction) == 1 else "down",
             })
 
-        # --- EPS surprise ---
         if not pd.isna(row.label_eps_surprise):
             eps_pairs.append({
-                "ticker":        row.ticker,
-                "date":          str(row.date)[:10],
-                "reported_eps":  row.reported_eps,
+                "ticker": row.ticker,
+                "date": str(row.date)[:10],
+                "reported_eps": row.reported_eps,
                 "consensus_eps": row.consensus_eps,
-                "input":         _make_prompt(_EPS_SYSTEM, transcript),
-                "output":        _eps_label(int(row.label_eps_surprise)),
+                "input": make_prompt(EPS_SYSTEM, transcript),
+                "output": "beat" if int(row.label_eps_surprise) == 1 else "miss",
             })
 
-    write_jsonl(direction_pairs, os.path.join(out_dir, "pairs_direction.jsonl"))
-    write_jsonl(eps_pairs,       os.path.join(out_dir, "pairs_eps_surprise.jsonl"))
+    if raw_chars:
+        logger.info(
+            "Boilerplate filter: kept %.1f%% of original chars (%d -> %d, mean %.0f -> %.0f per call)",
+            100 * clean_chars / raw_chars, raw_chars, clean_chars,
+            raw_chars / max(len(df), 1), clean_chars / max(len(df), 1),
+        )
 
-    # Summary statistics
+    if task in ("direction", "both"):
+        write_jsonl(direction_pairs, os.path.join(out_dir, "pairs_direction.jsonl"))
+    if task in ("surprise", "both"):
+        write_jsonl(eps_pairs, os.path.join(out_dir, "pairs_eps_surprise.jsonl"))
+
     if direction_pairs:
-        dir_df  = pd.DataFrame(direction_pairs)
-        up_pct  = (dir_df["output"] == "up").mean() * 100
-        logger.info("Direction pairs: %d total | up=%.1f%%  down=%.1f%%",
-                    len(dir_df), up_pct, 100 - up_pct)
-
+        up_pct = sum(p["output"] == "up" for p in direction_pairs) / len(direction_pairs) * 100
+        logger.info("Direction pairs: %d total | up=%.1f%% down=%.1f%%",
+                    len(direction_pairs), up_pct, 100 - up_pct)
     if eps_pairs:
-        eps_df   = pd.DataFrame(eps_pairs)
-        beat_pct = (eps_df["output"] == "beat").mean() * 100
-        logger.info("EPS pairs:       %d total | beat=%.1f%%  miss=%.1f%%",
-                    len(eps_df), beat_pct, 100 - beat_pct)
+        beat_pct = sum(p["output"] == "beat" for p in eps_pairs) / len(eps_pairs) * 100
+        logger.info("EPS pairs: %d total | beat=%.1f%% miss=%.1f%%",
+                    len(eps_pairs), beat_pct, 100 - beat_pct)
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Build LLM finetuning pairs")
-    parser.add_argument("--max-samples", type=int, default=500,
-                        help="Max transcripts to load (default 500)")
-    parser.add_argument("--price-window", type=int, default=3,
-                        help="Trading days after call for price label (default 3)")
-    parser.add_argument("--out-dir", type=str, default="data",
-                        help="Output directory (default: data/)")
-    parser.add_argument("--synthetic", action="store_true",
-                        help="Use synthetic data (smoke test, no internet needed)")
-    return parser.parse_args()
+    p = argparse.ArgumentParser()
+    p.add_argument("--max-samples", type=int, default=500)
+    p.add_argument("--price-window", type=int, default=3)
+    p.add_argument("--out-dir", type=str, default="data")
+    p.add_argument("--synthetic", action="store_true")
+    p.add_argument("--task", choices=["direction", "surprise", "both"], default="both")
+    p.add_argument("--min-date", type=str, default=None)
+    p.add_argument("--newest-first", action="store_true")
+    p.add_argument("--delay-sec", type=float, default=0.0)
+    return p.parse_args()
 
 
 def main():
     args = parse_args()
-
-    logger.info("Loading dataset (max_samples=%d) …", args.max_samples)
+    logger.info(
+        "Loading dataset (max_samples=%d task=%s min_date=%s newest_first=%s delay=%.2fs)",
+        args.max_samples, args.task, args.min_date, args.newest_first, args.delay_sec,
+    )
 
     if args.synthetic:
         from data.loader import _make_synthetic_data
@@ -157,18 +122,18 @@ def main():
         df = df.rename(columns={"label": "label_direction"})
         df["price_change_pct"] = np.where(df["label_direction"] == 1, 0.02, -0.02)
     else:
-        # Fail loudly rather than silently producing synthetic pairs when the
-        # real datasets cannot be loaded (e.g. env misconfig on the job node).
         df = load_dataset(
             max_samples=args.max_samples,
             price_window=args.price_window,
             use_synthetic_fallback=False,
+            task=args.task,
+            min_date=args.min_date,
+            newest_first=args.newest_first,
+            delay_sec=args.delay_sec,
         )
 
     logger.info("Loaded %d records", len(df))
-
-    build_pairs(df, args.out_dir)
-    logger.info("Done.")
+    build_pairs(df, args.out_dir, task=args.task)
 
 
 if __name__ == "__main__":

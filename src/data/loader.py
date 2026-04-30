@@ -1,13 +1,5 @@
-"""
-Data loading: earnings call transcripts + stock price labels.
-Primary source: Bose345/sp500_earnings_transcripts (HuggingFace)
-Fallback:       lamini/earnings-calls-qa
-Last resort:    synthetic data for smoke-testing
-"""
-
-import re
 import logging
-from datetime import timedelta, datetime
+from datetime import timedelta
 from typing import Optional
 
 import numpy as np
@@ -16,27 +8,18 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Stock price utilities
-# ---------------------------------------------------------------------------
-
 def _fetch_price_change(ticker: str, call_date: pd.Timestamp,
                         window_days: int = 3) -> Optional[float]:
-    """
-    Return % price change from close before the call to close `window_days`
-    trading days after the call.  Returns None on failure.
-    """
     try:
         import yfinance as yf
         start = call_date - timedelta(days=7)
-        end   = call_date + timedelta(days=window_days + 7)
-        hist  = yf.download(ticker, start=start.strftime("%Y-%m-%d"),
-                            end=end.strftime("%Y-%m-%d"),
-                            progress=False, auto_adjust=True)
+        end = call_date + timedelta(days=window_days + 7)
+        hist = yf.download(ticker, start=start.strftime("%Y-%m-%d"),
+                           end=end.strftime("%Y-%m-%d"),
+                           progress=False, auto_adjust=True)
         if hist.empty or "Close" not in hist.columns:
             return None
 
-        # Flatten MultiIndex columns if present (yfinance ≥0.2.x)
         if isinstance(hist.columns, pd.MultiIndex):
             hist.columns = hist.columns.get_level_values(0)
 
@@ -45,14 +28,13 @@ def _fetch_price_change(ticker: str, call_date: pd.Timestamp,
             return None
 
         dates_before = closes.index[closes.index < call_date]
-        dates_after  = closes.index[closes.index >= call_date]
+        dates_after = closes.index[closes.index >= call_date]
 
         if len(dates_before) == 0 or len(dates_after) < window_days:
             return None
 
         price_before = float(closes[dates_before[-1]])
-        price_after  = float(closes[dates_after[min(window_days - 1,
-                                                    len(dates_after) - 1)]])
+        price_after = float(closes[dates_after[min(window_days - 1, len(dates_after) - 1)]])
         if price_before == 0:
             return None
         return (price_after - price_before) / price_before
@@ -61,73 +43,61 @@ def _fetch_price_change(ticker: str, call_date: pd.Timestamp,
         return None
 
 
-# ---------------------------------------------------------------------------
-# EPS surprise utilities
-# ---------------------------------------------------------------------------
-
 def _fetch_eps_surprise(ticker: str, call_date: pd.Timestamp,
-                        window_days: int = 10, limit: int = 60) -> dict:
-    """
-    Return a dict with keys reported_eps, consensus_eps, label_eps_surprise
-    (1=beat, 0=miss) matched to the earnings call closest to call_date.
-
-    Uses yfinance.Ticker.earnings_dates whose index IS the earnings call date,
-    so a tight window_days=10 is sufficient.  Returns a dict of Nones on failure.
-    """
+                        window_days: int = 10, limit: int = 60,
+                        max_retries: int = 3,
+                        retry_delay: float = 30.0) -> dict:
+    import time
+    import yfinance as yf
     empty = {"reported_eps": None, "consensus_eps": None, "label_eps_surprise": None}
-    try:
-        import yfinance as yf
-        ed = yf.Ticker(ticker).get_earnings_dates(limit=limit)
+
+    for attempt in range(max_retries):
+        try:
+            ed = yf.Ticker(ticker).get_earnings_dates(limit=limit)
+        except Exception as e:
+            logger.debug("yfinance EPS error for %s on %s (attempt %d): %s",
+                         ticker, call_date, attempt + 1, e)
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+                continue
+            return empty
 
         if ed is None or ed.empty:
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+                continue
             return empty
 
-        # Drop future rows (Reported EPS is NaN until the call happens)
-        ed = ed.dropna(subset=["Reported EPS", "EPS Estimate"])
-        if ed.empty:
+        ed_full = ed.dropna(subset=["Reported EPS", "EPS Estimate"])
+        if ed_full.empty:
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+                continue
             return empty
 
-        # Normalise index to UTC for comparison
-        idx = pd.DatetimeIndex(ed.index).tz_convert("UTC")
+        idx = pd.DatetimeIndex(ed_full.index).tz_convert("UTC")
         call_ts = pd.Timestamp(call_date).tz_localize("UTC") if call_date.tzinfo is None \
                   else pd.Timestamp(call_date).tz_convert("UTC")
-
         diffs = pd.Series(idx - call_ts).abs()
         min_pos = diffs.argmin()
-
         if diffs[min_pos] > pd.Timedelta(days=window_days):
             return empty
-
-        row      = ed.iloc[min_pos]
-        actual   = float(row["Reported EPS"])
+        row = ed_full.iloc[min_pos]
+        actual = float(row["Reported EPS"])
         estimate = float(row["EPS Estimate"])
-
         return {
-            "reported_eps":       actual,
-            "consensus_eps":      estimate,
+            "reported_eps": actual,
+            "consensus_eps": estimate,
             "label_eps_surprise": int(actual >= estimate),
         }
-    except Exception as e:
-        logger.debug("yfinance EPS error for %s on %s: %s", ticker, call_date, e)
-        return empty
+    return empty
 
-
-# ---------------------------------------------------------------------------
-# Dataset loaders
-# ---------------------------------------------------------------------------
 
 def _resolve_column(columns: list, candidates: list) -> Optional[str]:
-    """
-    Return the first column whose lowercase name exactly matches or contains
-    any candidate string.  First match wins — avoids mapping two source
-    columns to the same target (e.g. "content" AND "structured_content"
-    both containing "content").
-    """
     for cand in candidates:
         for col in columns:
             if col.lower() == cand or col.lower() == cand.replace("_", ""):
                 return col
-    # Second pass: substring match (less precise, only if exact failed)
     for cand in candidates:
         for col in columns:
             if cand in col.lower():
@@ -136,21 +106,16 @@ def _resolve_column(columns: list, candidates: list) -> Optional[str]:
 
 
 def _load_sp500_transcripts(max_samples: int) -> pd.DataFrame:
-    """Load Bose345/sp500_earnings_transcripts from HuggingFace."""
     from datasets import load_dataset
-    logger.info("Loading Bose345/sp500_earnings_transcripts …")
-    # trust_remote_code no longer supported in newer datasets versions
+    logger.info("Loading Bose345/sp500_earnings_transcripts ...")
     ds = load_dataset("Bose345/sp500_earnings_transcripts", split="train")
     df = ds.to_pandas()
     logger.info("  Raw rows: %d, columns: %s", len(df), list(df.columns))
 
-    # BUG FIX: use first-match-wins resolver so "content" and
-    # "structured_content" don't both map to "text".
     cols = list(df.columns)
     ticker_col = _resolve_column(cols, ["ticker", "symbol"])
-    date_col   = _resolve_column(cols, ["date", "earnings_date", "call_date"])
-    # Prefer plain "content" or "transcript" over "structured_content"
-    text_col   = _resolve_column(cols, ["transcript", "content", "text", "body"])
+    date_col = _resolve_column(cols, ["date", "earnings_date", "call_date"])
+    text_col = _resolve_column(cols, ["transcript", "content", "text", "body"])
 
     if not ticker_col or not date_col or not text_col:
         raise ValueError(
@@ -158,11 +123,9 @@ def _load_sp500_transcripts(max_samples: int) -> pd.DataFrame:
             f"Resolved: ticker={ticker_col}, date={date_col}, text={text_col}"
         )
 
-    logger.info("  Resolved columns → ticker: %s | date: %s | text: %s",
+    logger.info("  Resolved columns -> ticker: %s | date: %s | text: %s",
                 ticker_col, date_col, text_col)
-    df = df.rename(columns={ticker_col: "ticker",
-                             date_col:   "date",
-                             text_col:   "text"})
+    df = df.rename(columns={ticker_col: "ticker", date_col: "date", text_col: "text"})
 
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df = df.dropna(subset=["date", "ticker", "text"])
@@ -170,34 +133,22 @@ def _load_sp500_transcripts(max_samples: int) -> pd.DataFrame:
     df = df[df["text"].str.len() > 100]
 
     if max_samples and len(df) > max_samples:
-        # Keep most-recent records to use full chronological range
         df = df.sort_values("date").tail(max_samples)
 
     return df[["ticker", "date", "text"]].reset_index(drop=True)
 
 
 def _load_lamini_transcripts(max_samples: int) -> pd.DataFrame:
-    """
-    Fallback: lamini/earnings-calls-qa.
-    Columns: question, answer, date, transcript, q, ticker, predictions
-    We use `transcript` (full call text) rather than `answer` to avoid
-    aggregating partial QA answers into a pseudo-transcript.
-    """
     from datasets import load_dataset
-    logger.info("Loading lamini/earnings-calls-qa …")
-    # trust_remote_code no longer supported in newer datasets versions
+    logger.info("Loading lamini/earnings-calls-qa ...")
     ds = load_dataset("lamini/earnings-calls-qa", split="train")
     df = ds.to_pandas()
     logger.info("  Raw rows: %d, columns: %s", len(df), list(df.columns))
 
     cols = list(df.columns)
-
-    # BUG FIX: use first-match-wins resolver so "answer" and "transcript"
-    # don't both collide on the "text" target.
-    # Prefer "transcript" (full call) over "answer" (single QA answer).
     ticker_col = _resolve_column(cols, ["ticker", "symbol"])
-    date_col   = _resolve_column(cols, ["date", "earnings_date"])
-    text_col   = _resolve_column(cols, ["transcript", "text", "answer", "body"])
+    date_col = _resolve_column(cols, ["date", "earnings_date"])
+    text_col = _resolve_column(cols, ["transcript", "text", "answer", "body"])
 
     if not date_col:
         raise ValueError(f"Cannot find date column. Available: {cols}")
@@ -206,7 +157,7 @@ def _load_lamini_transcripts(max_samples: int) -> pd.DataFrame:
     if not ticker_col:
         logger.warning("No ticker column found; using 'UNKNOWN'")
 
-    logger.info("  Resolved columns → ticker: %s | date: %s | text: %s",
+    logger.info("  Resolved columns -> ticker: %s | date: %s | text: %s",
                 ticker_col, date_col, text_col)
 
     rename_map = {date_col: "date_raw", text_col: "text"}
@@ -219,12 +170,7 @@ def _load_lamini_transcripts(max_samples: int) -> pd.DataFrame:
     df["date"] = pd.to_datetime(df["date_raw"], errors="coerce")
     df["text"] = df["text"].astype(str)
     df = df.dropna(subset=["date", "ticker", "text"])
-
-    # Deduplicate: if transcript column is used, the same transcript appears
-    # for every QA pair — keep one row per (ticker, date).
-    df = (df.groupby(["ticker", "date"])["text"]
-            .first()
-            .reset_index())
+    df = df.groupby(["ticker", "date"])["text"].first().reset_index()
 
     if max_samples and len(df) > max_samples:
         df = df.sort_values("date").tail(max_samples)
@@ -233,14 +179,10 @@ def _load_lamini_transcripts(max_samples: int) -> pd.DataFrame:
 
 
 def _make_synthetic_data(n: int = 200) -> pd.DataFrame:
-    """
-    Smoke-test fallback: generates synthetic transcripts with random sentiment
-    so the full pipeline can be validated end-to-end without internet access.
-    """
-    logger.warning("Using SYNTHETIC data — for smoke testing only!")
+    logger.warning("Using SYNTHETIC data - for smoke testing only!")
     np.random.seed(42)
     tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "META"]
-    dates   = pd.date_range("2018-01-01", "2023-12-31", periods=n)
+    dates = pd.date_range("2018-01-01", "2023-12-31", periods=n)
 
     positive_phrases = [
         "strong revenue growth exceeded expectations",
@@ -261,12 +203,10 @@ def _make_synthetic_data(n: int = 200) -> pd.DataFrame:
     for i, date in enumerate(dates):
         ticker = tickers[i % len(tickers)]
 
-        # --- prepared remarks ---
         prep_sent = np.random.choice(["pos", "neg"])
         prep_phrases = positive_phrases if prep_sent == "pos" else negative_phrases
         remarks = " ".join(np.random.choice(prep_phrases, size=3, replace=True))
 
-        # --- Q&A section (independent sentiment) ---
         qa_sent = np.random.choice(["pos", "neg"])
         qa_phrases = positive_phrases if qa_sent == "pos" else negative_phrases
         qa_text = " ".join(np.random.choice(qa_phrases, size=3, replace=True))
@@ -275,59 +215,47 @@ def _make_synthetic_data(n: int = 200) -> pd.DataFrame:
                 f"Operator: Question-and-Answer Session. "
                 f"Q: Could you elaborate on guidance? A: {qa_text}")
 
-        # BUG FIX: old code used  label = 1 if prep_sent == "pos" else 0
-        # That made the label a PERFECT function of the prepared-remarks text,
-        # so FinBERT recovered it with 1.0 AUC — meaningless.
-        #
-        # Real stock moves are noisy.  We simulate a weak signal:
-        #   ~60% chance label matches prepared sentiment
-        #   ~50% chance label matches Q&A sentiment (weaker / independent)
-        #   ~30% pure noise flips to break determinism
         base_label = 1 if prep_sent == "pos" else 0
-        if np.random.random() < 0.35:      # 35% label-flip noise
+        if np.random.random() < 0.35:
             base_label = 1 - base_label
         label = base_label
 
-        # Synthetic EPS surprise: weakly correlated with Q&A sentiment,
-        # independent of price direction to reflect real-world noise.
         eps_beat = 1 if qa_sent == "pos" else 0
-        if np.random.random() < 0.30:   # 30% flip for realism
+        if np.random.random() < 0.30:
             eps_beat = 1 - eps_beat
-        reported_eps  = round(np.random.uniform(0.5, 3.0), 2)
+        reported_eps = round(np.random.uniform(0.5, 3.0), 2)
         consensus_eps = round(reported_eps + (0.05 if eps_beat else -0.05)
                               + np.random.uniform(-0.02, 0.02), 2)
 
         rows.append({
             "ticker": ticker,
-            "date":   date,
-            "text":   text,
-            "label":              label,
+            "date": date,
+            "text": text,
+            "label": label,
             "label_eps_surprise": eps_beat,
-            "reported_eps":       reported_eps,
-            "consensus_eps":      consensus_eps,
+            "reported_eps": reported_eps,
+            "consensus_eps": consensus_eps,
             "_synthetic": True,
         })
 
     return pd.DataFrame(rows)
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
+_FINAL_COLS = [
+    "ticker", "date", "text",
+    "label_direction", "price_change_pct",
+    "label_eps_surprise", "reported_eps", "consensus_eps",
+]
+
 
 def load_dataset(max_samples: int = 500,
                  price_window: int = 3,
-                 use_synthetic_fallback: bool = True) -> pd.DataFrame:
-    """
-    Returns a DataFrame with columns:
-        ticker, date, text, label, price_change
-    where label=1 means price went up after the earnings call.
-
-    Loading order:
-        1. Bose345/sp500_earnings_transcripts
-        2. lamini/earnings-calls-qa
-        3. Synthetic (smoke-test) data
-    """
+                 use_synthetic_fallback: bool = True,
+                 task: str = "both",
+                 min_date: str = None,
+                 newest_first: bool = False,
+                 delay_sec: float = 0.0) -> pd.DataFrame:
+    import time
     df = None
     synthetic = False
 
@@ -342,61 +270,71 @@ def load_dataset(max_samples: int = 500,
 
     if df is None:
         if not use_synthetic_fallback:
-            raise RuntimeError("All data sources failed and synthetic "
-                               "fallback is disabled.")
+            raise RuntimeError("All data sources failed and synthetic fallback is disabled.")
         df = _make_synthetic_data(max_samples or 200)
         synthetic = True
 
-    _FINAL_COLS = [
-        "ticker", "date", "text",
-        "label_direction", "price_change_pct",
-        "label_eps_surprise", "reported_eps", "consensus_eps",
-    ]
-
     if synthetic and "_synthetic" in df.columns:
-        # Labels already baked in; no network calls needed.
         df = df.rename(columns={"label": "label_direction"})
         df["price_change_pct"] = np.where(df["label_direction"] == 1, 0.02, -0.02)
         return df[_FINAL_COLS].reset_index(drop=True)
 
-    # ------------------------------------------------------------------
-    # Fetch real stock-price labels (yfinance)
-    # ------------------------------------------------------------------
-    logger.info("Fetching stock-price labels via yfinance …")
-    price_changes = []
-    for _, row in df.iterrows():
-        pc = _fetch_price_change(row["ticker"], row["date"], price_window)
-        price_changes.append(pc)
+    if min_date:
+        before = len(df)
+        df = df[df["date"] >= pd.Timestamp(min_date)].reset_index(drop=True)
+        logger.info("Filtered by min_date=%s: %d -> %d transcripts",
+                    min_date, before, len(df))
 
-    df["price_change_pct"] = price_changes
-    df = df.dropna(subset=["price_change_pct"])
-    df["label_direction"] = (df["price_change_pct"] > 0).astype(int)
+    if newest_first:
+        df = df.sort_values("date", ascending=False).reset_index(drop=True)
 
-    # ------------------------------------------------------------------
-    # Fetch EPS surprise labels (yahooquery)
-    # ------------------------------------------------------------------
-    logger.info("Fetching EPS surprise labels via yahooquery …")
-    eps_rows = []
-    for i, row in enumerate(df.itertuples(), 1):
-        if i % 50 == 0:
-            logger.info("  EPS progress: %d / %d", i, len(df))
-        eps_rows.append(_fetch_eps_surprise(row.ticker, row.date))
+    if task in ("direction", "both"):
+        logger.info("Fetching stock-price labels via yfinance ...")
+        price_changes = []
+        for i, (_, row) in enumerate(df.iterrows(), 1):
+            pc = _fetch_price_change(row["ticker"], row["date"], price_window)
+            price_changes.append(pc)
+            if delay_sec > 0:
+                time.sleep(delay_sec)
+            if i % 200 == 0:
+                ok = sum(1 for x in price_changes if x is not None)
+                logger.info("  Price progress: %d / %d  (%d ok)", i, len(df), ok)
+        df["price_change_pct"] = price_changes
+        df = df.dropna(subset=["price_change_pct"])
+        df["label_direction"] = (df["price_change_pct"] > 0).astype(int)
+    else:
+        df["price_change_pct"] = None
+        df["label_direction"] = None
 
-    eps_df = pd.DataFrame(eps_rows, index=df.index)
-    df = pd.concat([df, eps_df], axis=1)
+    if task in ("surprise", "both"):
+        logger.info("Fetching EPS surprise labels via yfinance ...")
+        eps_rows = []
+        for i, row in enumerate(df.itertuples(), 1):
+            eps_rows.append(_fetch_eps_surprise(row.ticker, row.date))
+            if delay_sec > 0:
+                time.sleep(delay_sec)
+            if i % 50 == 0:
+                ok = sum(1 for r in eps_rows if r["label_eps_surprise"] is not None)
+                logger.info("  EPS progress: %d / %d  (%d ok = %.1f%%)",
+                            i, len(df), ok, 100 * ok / i)
+        eps_df = pd.DataFrame(eps_rows, index=df.index)
+        df = pd.concat([df, eps_df], axis=1)
+    else:
+        for col in ("label_eps_surprise", "reported_eps", "consensus_eps"):
+            df[col] = None
 
+    direction_counts = (df["label_direction"].dropna().astype(int).value_counts().to_dict()
+                        if df["label_direction"].notna().any() else {})
+    eps_counts = (df["label_eps_surprise"].dropna().astype(int).value_counts().to_dict()
+                  if df["label_eps_surprise"].notna().any() else {})
     logger.info(
         "Final dataset: %d records | direction labels: %s | eps labels: %s",
-        len(df),
-        df["label_direction"].value_counts().to_dict(),
-        df["label_eps_surprise"].dropna().astype(int).value_counts().to_dict(),
+        len(df), direction_counts, eps_counts,
     )
     return df[_FINAL_COLS].reset_index(drop=True)
 
 
-def chronological_split(df: pd.DataFrame,
-                        train_ratio: float = 0.8):
-    """Strict chronological train/test split — NO random shuffling."""
+def chronological_split(df: pd.DataFrame, train_ratio: float = 0.8):
     df = df.sort_values("date").reset_index(drop=True)
     split = int(len(df) * train_ratio)
     return df.iloc[:split].copy(), df.iloc[split:].copy()

@@ -1,25 +1,3 @@
-"""
-QLoRA finetuning on the JSONL pairs produced by src/data/build_pairs.py.
-
-Each input file (pairs_direction.jsonl or pairs_eps_surprise.jsonl) has one
-JSON record per line with at least these fields:
-    {
-        "ticker": "AAPL",
-        "date":   "2023-11-02",
-        "input":  "<system prompt>\\n\\nTranscript:\\n<full transcript>",
-        "output": "up" | "down"   (or "beat" | "miss")
-    }
-
-We chronologically split into train / val (90 / 10), then finetune
-Qwen2.5-7B-Instruct in 4-bit + LoRA so it learns to emit the single-token
-answer right after the prompt.
-
-Run:
-    python -m src.models.finetune \\
-        --pairs data/pairs_direction.jsonl \\
-        --out   outputs/direction
-"""
-
 import argparse
 import json
 import logging
@@ -49,7 +27,7 @@ def load_pairs(path: Path) -> list[dict]:
             line = line.strip()
             if line:
                 rows.append(json.loads(line))
-    rows.sort(key=lambda r: r.get("date", ""))   # chronological order
+    rows.sort(key=lambda r: r.get("date", ""))
     return rows
 
 
@@ -60,9 +38,6 @@ def chrono_split(rows: list[dict], train_ratio: float = 0.9):
 
 
 def balance_classes(rows: list[dict], seed: int = 42) -> list[dict]:
-    """Subsample the majority class(es) in `rows` so every class ends up with
-    the same count as the minority. Used to produce a balanced test/val set
-    so metrics aren't dominated by the majority class."""
     rng = random.Random(seed)
     by_class: dict[str, list[dict]] = {}
     for r in rows:
@@ -77,11 +52,6 @@ def balance_classes(rows: list[dict], seed: int = 42) -> list[dict]:
 
 def head_tail_truncate(tokenizer, text: str, max_length: int,
                        head_ratio: float = 0.6) -> list[int]:
-    """Tokenize `text` and, if longer than `max_length`, keep the first
-    `head_ratio` of the budget from the start and the rest from the end.
-    Earnings calls open with management's prepared remarks (narrative) and
-    close with Q&A + forward guidance (what moves stocks). Plain front-
-    truncation drops the Q&A entirely; this keeps both."""
     ids = tokenizer(text, add_special_tokens=False)["input_ids"]
     if len(ids) <= max_length:
         return ids
@@ -91,9 +61,6 @@ def head_tail_truncate(tokenizer, text: str, max_length: int,
 
 
 def oversample_minority(rows: list[dict], seed: int = 42) -> list[dict]:
-    """Sample minority classes with replacement so every class ends up with
-    the same count as the majority. Applied to train only — test
-    distribution is preserved."""
     rng = random.Random(seed)
     by_class: dict[str, list[dict]] = {}
     for r in rows:
@@ -110,38 +77,31 @@ def oversample_minority(rows: list[dict], seed: int = 42) -> list[dict]:
 
 
 class PairDataset(Dataset):
-    """
-    Tokenizes (input, output) pairs.  The input portion is masked in the
-    label tensor (-100) so loss is only computed on the answer tokens.
-    Truncation uses head_tail_truncate to keep both the prepared remarks
-    (start) and the Q&A section (end) when the transcript exceeds max_length.
-    """
     def __init__(self, rows, tokenizer, max_length: int):
-        self.rows       = rows
-        self.tokenizer  = tokenizer
+        self.rows = rows
+        self.tokenizer = tokenizer
         self.max_length = max_length
 
     def __len__(self):
         return len(self.rows)
 
     def __getitem__(self, idx):
-        row    = self.rows[idx]
+        row = self.rows[idx]
         prompt = row["input"] + "\n\nAnswer:"
         answer = " " + row["output"] + self.tokenizer.eos_token
 
-        # Reserve space for the answer so it never gets truncated away.
-        ans_ids    = self.tokenizer(answer, add_special_tokens=False)["input_ids"]
+        ans_ids = self.tokenizer(answer, add_special_tokens=False)["input_ids"]
         prompt_max = max(self.max_length - len(ans_ids), 32)
         prompt_ids = head_tail_truncate(self.tokenizer, prompt, prompt_max)
 
         input_ids = prompt_ids + ans_ids
-        labels    = [-100] * len(prompt_ids) + list(ans_ids)
+        labels = [-100] * len(prompt_ids) + list(ans_ids)
         attention = [1] * len(input_ids)
 
         return {
-            "input_ids":      torch.tensor(input_ids,  dtype=torch.long),
-            "attention_mask": torch.tensor(attention,  dtype=torch.long),
-            "labels":         torch.tensor(labels,     dtype=torch.long),
+            "input_ids": torch.tensor(input_ids, dtype=torch.long),
+            "attention_mask": torch.tensor(attention, dtype=torch.long),
+            "labels": torch.tensor(labels, dtype=torch.long),
         }
 
 
@@ -155,20 +115,21 @@ def collate(batch, pad_id: int):
         return out
 
     return {
-        "input_ids":      _pad([b["input_ids"]      for b in batch], pad_id),
+        "input_ids": _pad([b["input_ids"] for b in batch], pad_id),
         "attention_mask": _pad([b["attention_mask"] for b in batch], 0),
-        "labels":         _pad([b["labels"]         for b in batch], -100),
+        "labels": _pad([b["labels"] for b in batch], -100),
     }
 
 
-def build_model(base_model: str):
+def build_model(base_model: str, bf16: bool = False):
     from transformers import AutoModelForCausalLM, BitsAndBytesConfig
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
+    compute_dtype = torch.bfloat16 if bf16 else torch.float16
     bnb = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.float16,   # V100 (sm_70) has no bf16 support
+        bnb_4bit_compute_dtype=compute_dtype,
         bnb_4bit_use_double_quant=True,
     )
     model = AutoModelForCausalLM.from_pretrained(
@@ -191,19 +152,17 @@ def build_model(base_model: str):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--pairs",      type=Path, required=True,
-                    help="Path to pairs JSONL (e.g. data/pairs_direction.jsonl)")
-    ap.add_argument("--out",        type=Path, required=True,
-                    help="Output dir for adapter + checkpoints")
+    ap.add_argument("--pairs", type=Path, required=True)
+    ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--base-model", default="Qwen/Qwen2.5-7B-Instruct")
     ap.add_argument("--max-length", type=int, default=2048)
-    ap.add_argument("--epochs",     type=int, default=3)
-    ap.add_argument("--lr",         type=float, default=2e-4)
+    ap.add_argument("--epochs", type=int, default=3)
+    ap.add_argument("--lr", type=float, default=2e-4)
     ap.add_argument("--batch-size", type=int, default=1)
     ap.add_argument("--grad-accum", type=int, default=8)
-    ap.add_argument("--seed",       type=int, default=42)
-    ap.add_argument("--balance-test", action="store_true",
-                    help="Subsample majority class in val to match minority")
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--balance-test", action="store_true")
+    ap.add_argument("--bf16", action="store_true")
     args = ap.parse_args()
 
     from transformers import AutoTokenizer, Trainer, TrainingArguments
@@ -233,12 +192,12 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = build_model(args.base_model)
+    model = build_model(args.base_model, bf16=args.bf16)
     model.gradient_checkpointing_enable()
     model.config.use_cache = False
 
     train_ds = PairDataset(train, tokenizer, args.max_length)
-    val_ds   = PairDataset(val,   tokenizer, args.max_length)
+    val_ds = PairDataset(val, tokenizer, args.max_length)
 
     args.out.mkdir(parents=True, exist_ok=True)
     training_args = TrainingArguments(
@@ -254,10 +213,11 @@ def main():
         eval_strategy="epoch",
         save_strategy="epoch",
         save_total_limit=2,
-        load_best_model_at_end=True,             # val loss climbs after epoch 1
+        load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
-        fp16=True,                               # V100 (sm_70) has no bf16
+        fp16=not args.bf16,
+        bf16=args.bf16,
         optim="paged_adamw_8bit",
         report_to="none",
         seed=args.seed,

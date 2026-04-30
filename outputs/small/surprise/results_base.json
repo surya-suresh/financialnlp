@@ -1,0 +1,17 @@
+{
+  "task": "surprise",
+  "pairs_file": "data/pairs_eps_surprise.jsonl",
+  "adapter": null,
+  "n_test": 83,
+  "accuracy": 0.7590361445783133,
+  "balanced_accuracy": 0.5662006578947368,
+  "auc": 0.6369243421052632,
+  "auc_ci_95": [
+    0.4890526673340961,
+    0.7781187810945273
+  ],
+  "class_balance": {
+    "beat": 64,
+    "miss": 19
+  }
+}
