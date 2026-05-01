@@ -185,11 +185,11 @@ by the class prior.
 \toprule
 \textbf{Set} & \textbf{Task} & \textbf{Total} & \textbf{Train} & \textbf{Test} & \textbf{\% pos.} \\
 \midrule
-Small & Direction &  1{,}965 &  1{,}768 &     197 & 51.1 \\
-      & Surprise  &      827 &      744 &      83 & 80.9 \\
+Small & Dir. &  1{,}965 &  1{,}768 &     197 & 51.1 \\
+      & Sur.  &      827 &      744 &      83 & 80.9 \\
 \midrule
-Large & Direction & 11{,}449 & 10{,}304 & 1{,}145 & 53.0 \\
-      & Surprise  &  7{,}838 &  7{,}054 &     784 & 79.3 \\
+Large & Dir. & 11{,}449 & 10{,}304 & 1{,}145 & 53.0 \\
+      & Sur.  &  7{,}838 &  7{,}054 &     784 & 79.3 \\
 \bottomrule
 \end{tabular}
 \caption{Dataset sizes for both pipeline runs after fetching labels.
@@ -378,15 +378,15 @@ small and large datasets.
 \toprule
 \textbf{Set} & \textbf{Task} & \textbf{Model} & \textbf{Acc} & \textbf{B-Acc} & \textbf{AUC} & \textbf{95\% CI} \\
 \midrule
-Small & Direction & Base & 0.569 & 0.502 & 0.493 & [0.41, 0.57] \\
-      & Direction & FT   & 0.594 & 0.500 & 0.499 & [0.42, 0.58] \\
-      & Surprise  & Base & 0.759 & 0.566 & 0.637 & [0.49, 0.78] \\
-      & Surprise  & FT   & \textbf{0.807} & \textbf{0.708} & \textbf{0.812} & \textbf{[0.69, 0.92]} \\
+Small & Dir. & Base & 0.569 & 0.502 & 0.493 & [0.41, 0.57] \\
+      & Dir. & FT   & 0.594 & 0.500 & 0.499 & [0.42, 0.58] \\
+      & Sur.  & Base & 0.759 & 0.566 & 0.637 & [0.49, 0.78] \\
+      & Sur.  & FT   & \textbf{0.807} & \textbf{0.708} & \textbf{0.812} & \textbf{[0.69, 0.92]} \\
 \midrule
-Large & Direction & Base & 0.542 & 0.503 & 0.500 & [0.47, 0.53] \\
-      & Direction & FT   & 0.457 & 0.492 & 0.499 & [0.46, 0.53] \\
-      & Surprise  & Base & 0.739 & 0.575 & 0.620 & [0.57, 0.66] \\
-      & Surprise  & FT   & \textbf{0.755} & \textbf{0.641} & \textbf{0.737} & \textbf{[0.70, 0.78]} \\
+Large & Dir. & Base & 0.542 & 0.503 & 0.500 & [0.47, 0.53] \\
+      & Dir. & FT   & 0.457 & 0.492 & 0.499 & [0.46, 0.53] \\
+      & Sur.  & Base & 0.739 & 0.575 & 0.620 & [0.57, 0.66] \\
+      & Sur.  & FT   & \textbf{0.755} & \textbf{0.641} & \textbf{0.737} & \textbf{[0.70, 0.78]} \\
 \bottomrule
 \end{tabular}
 \caption{Fine-tuning vs.\ zero-shot base on the small and large
@@ -478,15 +478,15 @@ $n=197$ and does not warrant interpretation.
 \toprule
 \textbf{Set} & \textbf{Task} & \textbf{Model} & \textbf{ZS} & \textbf{4-shot} & \textbf{RAG} & \textbf{RAG+4} \\
 \midrule
-Small & Direction & Base & 0.493 & 0.520 & 0.492 & 0.532 \\
-      & Direction & FT   & 0.499 & 0.536 & 0.494 & 0.538 \\
-      & Surprise  & Base & 0.637 & 0.720 & 0.680 & 0.676 \\
-      & Surprise  & FT   & 0.812 & 0.748 & 0.752 & 0.722 \\
+Small & Dir. & Base & 0.493 & 0.520 & 0.492 & 0.532 \\
+      & Dir. & FT   & 0.499 & 0.536 & 0.494 & 0.538 \\
+      & Sur.  & Base & 0.637 & 0.720 & 0.680 & 0.676 \\
+      & Sur.  & FT   & 0.812 & 0.748 & 0.752 & 0.722 \\
 \midrule
-Large & Direction & Base & 0.500 & --    & --    & -- \\
-      & Direction & FT   & 0.499 & --    & --    & -- \\
-      & Surprise  & Base & 0.620 & --    & --    & -- \\
-      & Surprise  & FT   & 0.737 & --    & --    & -- \\
+Large & Dir. & Base & 0.500 & --    & --    & -- \\
+      & Dir. & FT   & 0.499 & --    & --    & -- \\
+      & Sur.  & Base & 0.620 & --    & --    & -- \\
+      & Sur.  & FT   & 0.737 & --    & --    & -- \\
 \bottomrule
 \end{tabular}
 \caption{AUC across all conditions on the small and large datasets.
