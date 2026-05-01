@@ -18,7 +18,6 @@ from models.evaluate import (
     TASK_LABELS, detect_task, chrono_test_split,
     first_subword_id, load_model, bootstrap_ci, filter_by_eps_margin,
 )
-from data.loader import fetch_context_blocks_batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -47,7 +46,7 @@ TASK_SYSTEMS = {
 }
 
 
-def chrono_train_split(rows: list[dict], train_ratio: float = 0.9) -> list[dict]:
+def chrono_train_split(rows: list[dict], train_ratio: float = 0.9):
     k = int(len(rows) * train_ratio)
     return rows[:k]
 
@@ -59,8 +58,7 @@ def extract_transcript(input_text: str) -> str:
     return input_text.strip()
 
 
-def select_shots(train_rows: list[dict], n_shots: int,
-                 pos_label: str, neg_label: str, seed: int = 42) -> list[dict]:
+def select_shots(train_rows: list[dict], n_shots: int, pos_label: str, neg_label: str, seed: int = 42):
     if n_shots % 2 != 0:
         raise ValueError(f"n_shots must be even; got {n_shots}")
 
@@ -113,7 +111,7 @@ def _score_sentence(sentence: str) -> int:
     return score
 
 
-def extract_top_sentences(transcript: str, tokenizer, budget: int) -> str:
+def extract_top_sentences(transcript: str, tokenizer, budget: int):
     cleaned = transcript.replace("\n", " ")
     raw_sentences = [s.strip() for s in re.split(r'(?<!\d)\.(?!\d)\s+', cleaned)
                      if len(s.strip()) > 20]
@@ -138,47 +136,41 @@ def extract_top_sentences(transcript: str, tokenizer, budget: int) -> str:
     return ". ".join(scored[i][1] for i in chosen_indices)
 
 
-def build_shot_excerpts(shots: list[dict], tokenizer, excerpt_tokens: int) -> list[str]:
+def build_shot_excerpts(shots: list[dict], tokenizer, excerpt_tokens: int):
     excerpts = []
     for row in shots:
-        raw     = extract_transcript(row["input"])
+        raw = extract_transcript(row["input"])
         excerpt = extract_top_sentences(raw, tokenizer, excerpt_tokens)
         excerpts.append(excerpt)
     return excerpts
 
 
-def build_prompt(system: str, shots: list[dict], shot_excerpts: list[str],
-                 shot_context_blocks: list[str],
-                 tokenizer, test_input: str, max_length: int,
-                 context_block: str = "") -> str:
+def build_prompt(system: str, shots: list[dict], shot_excerpts: list[str], tokenizer, test_input: str, max_length: int):
     header = (
         f"{system}\n\n"
         f"Below are {len(shots)} examples with known outcomes.\n"
     )
 
     ex_block = ""
-    for i, (row, excerpt, sctx) in enumerate(zip(shots, shot_excerpts, shot_context_blocks), 1):
-        ctx_part = f"{sctx}\n" if sctx else ""
+    for i, (row, excerpt) in enumerate(zip(shots, shot_excerpts), 1):
         ex_block += (
             f"\nExample {i}:\n"
-            f"{ctx_part}"
             f"Transcript: {excerpt}\n"
             f"Answer: {row['output']}\n"
         )
 
-    ctx_section = f"\n{context_block}\n" if context_block else ""
-    test_header = f"\nNow analyze the following:{ctx_section}\nTranscript: "
-    suffix      = "\nAnswer:"
+    test_header = "\nNow analyze the following:\nTranscript: "
+    suffix = "\nAnswer:"
 
-    framework     = header + ex_block + test_header + suffix
+    framework = header + ex_block + test_header + suffix
     framework_len = len(tokenizer(framework, add_special_tokens=False)["input_ids"])
-    test_budget   = max(max_length - framework_len, 64)
+    test_budget = max(max_length - framework_len, 64)
 
     raw_test = extract_transcript(test_input)
 
     # iteratively shrink budget if tokenization drift causes an overrun
     for _ in range(20):
-        test_text   = extract_top_sentences(raw_test, tokenizer, test_budget)
+        test_text = extract_top_sentences(raw_test, tokenizer, test_budget)
         full_prompt = header + ex_block + test_header + test_text + suffix
         if len(tokenizer(full_prompt, add_special_tokens=False)["input_ids"]) <= max_length:
             break
@@ -188,8 +180,7 @@ def build_prompt(system: str, shots: list[dict], shot_excerpts: list[str],
 
 
 @torch.no_grad()
-def predict(model, tokenizer, prompts: list[str], labels: list[int],
-            task: str, max_length: int):
+def predict(model, tokenizer, prompts: list[str], labels: list[int], task: str, max_length: int):
     pos_word, neg_word = TASK_LABELS[task]
     pos_id = first_subword_id(tokenizer, pos_word)
     neg_id = first_subword_id(tokenizer, neg_word)
@@ -207,7 +198,7 @@ def predict(model, tokenizer, prompts: list[str], labels: list[int],
             "attention_mask": torch.tensor([[1] * len(ids)], device=model.device),
         }
         logits = model(**enc).logits[0, -1]
-        pair   = torch.tensor([logits[pos_id], logits[neg_id]])
+        pair = torch.tensor([logits[pos_id], logits[neg_id]])
         probs_pos.append(torch.softmax(pair, dim=0)[0].item())
         y_true.append(label)
         if (i + 1) % 10 == 0:
@@ -228,7 +219,6 @@ def main():
     ap.add_argument("--min-eps-margin", type=float, default=0.0)
     ap.add_argument("--balance-test",   action="store_true")
     ap.add_argument("--seed",           type=int,  default=42)
-    ap.add_argument("--context",        action="store_true")
     args = ap.parse_args()
 
     from transformers import AutoTokenizer
@@ -239,7 +229,7 @@ def main():
     logger.info("Task: %s  |  total pairs: %d", task, len(rows))
 
     train = chrono_train_split(rows, 0.9)
-    test  = chrono_test_split(rows, 0.9)
+    test = chrono_test_split(rows, 0.9)
     logger.info("Train=%d  Test=%d (before balancing)", len(train), len(test))
 
     if args.balance_test:
@@ -251,7 +241,7 @@ def main():
     logger.info("%d-shot examples: %s", len(shots),
                 [(s["ticker"], s["date"], s["output"]) for s in shots])
 
-    tok_src   = args.adapter or args.base_model
+    tok_src = args.adapter or args.base_model
     tokenizer = AutoTokenizer.from_pretrained(tok_src, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -261,23 +251,12 @@ def main():
     logger.info("Pre-building shot excerpts ...")
     shot_excerpts = build_shot_excerpts(shots, tokenizer, args.excerpt_tokens)
 
-    context_map: dict = {}
-    shot_context_blocks: list[str] = [""] * len(shots)
-    if args.context:
-        logger.info("Fetching context blocks via yfinance ...")
-        context_map = fetch_context_blocks_batch(shots + test)
-        shot_context_blocks = [
-            context_map.get((s["ticker"], s["date"][:10]), "") for s in shots
-        ]
-
     logger.info("Building %d prompts ...", len(test))
     prompts, labels = [], []
     for row in test:
-        ctx_block = context_map.get((row["ticker"], row["date"][:10]), "")
         prompt = build_prompt(
-            system, shots, shot_excerpts, shot_context_blocks, tokenizer,
+            system, shots, shot_excerpts, tokenizer,
             row["input"], args.max_length,
-            context_block=ctx_block,
         )
         prompts.append(prompt)
         labels.append(int(row["output"].strip().lower() == pos_word))
@@ -291,7 +270,7 @@ def main():
 
     acc  = accuracy_score(y_true, y_pred)
     bacc = balanced_accuracy_score(y_true, y_pred)
-    auc  = roc_auc_score(y_true, y_prob)
+    auc = roc_auc_score(y_true, y_prob)
     auc_lo, auc_hi = bootstrap_ci(y_true, y_prob, roc_auc_score)
 
     results = {
@@ -302,7 +281,6 @@ def main():
         "seed":              args.seed,
         "max_length":        args.max_length,
         "cot":               False,
-        "context":           bool(args.context),
         "excerpt_tokens":    args.excerpt_tokens,
         "balanced_test":     bool(args.balance_test),
         "min_eps_margin":    float(args.min_eps_margin),
