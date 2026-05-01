@@ -19,6 +19,7 @@ financialnlp/
     data/         loader.py, preprocessor.py, build_pairs.py
     features/     FinBERT sentiment + extractor (baseline)
     models/       finetune.py, evaluate.py, classifier.py (baseline)
+    retrieval/    build_index.py, embed_utils.py, evaluate_rag.py, fewshot.py, retriever.py
     utils/        metrics.py
     main.py       baseline pipeline (FinBERT + logreg)
   scripts/        Slurm job scripts (build, finetune, eval per cluster)
@@ -95,3 +96,33 @@ The trained LoRA adapters and tokenizer files are committed under `outputs/{smal
 - EPS surprise: `yfinance.Ticker(...).get_earnings_dates(...)` matched to the call by date.
 
 yfinance fails for delisted tickers, recent IPOs, and corporate-action edge cases. The fetch helpers in [src/data/loader.py](src/data/loader.py) catch those and drop affected rows.
+
+## Retrieval-Augmented Generation (RAG)
+
+The project includes a RAG pipeline that augments the base and fine-tuned models with retrieved context from prior earnings calls.
+
+We initially used sparse BM25 keyword retrieval as a simple baseline, then moved to dense retrieval using BAAI/bge-small-en-v1.5 embeddings indexed with FAISS. Dense retrieval finds semantically similar calls rather than relying on keyword overlap, which is better suited to the varied language of earnings transcripts.
+
+At query time, retrieval combines a same-company heuristic (the most recent prior call from the same ticker) with nearest-neighbor search across the training split index. Retrieved passages are injected into the prompt alongside an optional set of few-shot labeled examples.
+
+## Project Structure
+
+```
+src/retrieval/    RAG system: transcript embedding, FAISS indexing, retrieval logic, few-shot context building
+src/models/       Fine-tuning and evaluation pipeline for Qwen2.5 models
+scripts/slurm/    SLURM scripts used to run experiments on OSC Pitzer cluster
+data/             Processed datasets — JSONL pairs for direction and EPS surprise tasks
+outputs/          Model adapter weights and per-condition evaluation results
+docs/             Final report and project writeups
+```
+
+## Running on OSC (Pitzer)
+
+Experiments were run on the Ohio Supercomputer Center Pitzer cluster (V100 GPUs). Code and data were copied to OSC scratch space under `/fs/scratch/PAS3272/suryasuresh/finance_nlp_share`.
+
+SLURM jobs were used for two stages:
+
+- **Index building** (CPU jobs): build FAISS indices for each task before evaluation runs.
+- **Evaluation** (GPU jobs): run inference across all experimental conditions.
+
+Separate launcher scripts (`scripts/slurm/run_small.sh`, `run_large.sh`) submit the full condition matrix for the small and large datasets respectively. Some large-dataset evaluation runs did not fully complete within cluster time limits before the project deadline.
