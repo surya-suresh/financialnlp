@@ -1,0 +1,18 @@
+{
+  "task": "direction",
+  "pairs_file": "data/large/pairs_direction.jsonl",
+  "adapter": "outputs/large/direction/adapter",
+  "balanced_test": false,
+  "n_test": 1145,
+  "accuracy": 0.45676855895196505,
+  "balanced_accuracy": 0.4916197500107914,
+  "auc": 0.4994681408671308,
+  "auc_ci_95": [
+    0.4640693275855056,
+    0.5345434234196842
+  ],
+  "class_balance": {
+    "up": 631,
+    "down": 514
+  }
+}
