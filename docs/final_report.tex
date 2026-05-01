@@ -316,16 +316,28 @@ Section~\ref{sec:formulation}.
 \subsection{Retrieval-augmented generation}
 \label{sec:rag}
 
-\textit{[Section to be completed by teammate.]} The retrieval corpus
-contains $\sim$450 documents, one per training transcript, each
-consisting of the company ticker, call date, and first 2{,}000
-characters of the transcript. Retrieval is sparse: the system first
-attempts a same-company prior-quarter lookup (most recent transcripts
-from the same ticker with date strictly preceding the query call),
-then falls back to BM25 keyword ranking over the full training corpus
-to fill remaining slots. Retrieved passages are prepended to the
-prompt within a $\sim$400-token budget. The corpus is restricted to
-the training split to prevent any test leakage.
+We initially used BM25 keyword matching ($k=25$) as a retrieval
+baseline, but lexical overlap turned out to be too brittle across
+earnings calls. Companies in the same sector often describe similar
+situations in very different terms. We switched to dense retrieval
+using BAAI/bge-small-en-v1.5 embeddings over a FAISS index, which
+better captures semantic similarity regardless of surface wording.
+
+The index is built from the training split only (first
+$\lfloor 0.9n \rfloor$ chronological rows, matching the evaluation
+boundary), so no test transcript is ever retrievable. Each transcript
+is extracted from the prompt string, truncated to 512 bge tokens, and
+stored as an L2-normalised embedding. We apply the same extraction at
+query time. No outcome labels are stored.
+
+At query time we retrieve up to $k=3$ passages: the first slot goes
+to the most recent prior call from the same company if one exists,
+and FAISS nearest-neighbour search fills the rest. The prompt budget
+is managed dynamically. Retrieved passages share a 400-token Qwen
+budget, and when few-shot examples are also present, we reduce both
+blocks (passages first, then shots) until the test transcript retains
+at least 512 tokens. The transcript is then head-and-tail truncated
+(60/40) to whatever remains.
 
 \section{Experimental Setup}
 \label{sec:setup}
@@ -446,9 +458,23 @@ the Discussion alongside the other augmentation conditions.
 
 \subsection{Retrieval-augmented generation}
 
-\textit{[Analysis to be completed by teammate.]} The combined
-results across all conditions, including RAG, are presented in
-Table~\ref{tab:all-results}.
+Note that these results are reflective of our sparse retrieval, and not dense retrieval. On the surprise task, retrieval alone improves the base model
+(AUC $0.637\rightarrow0.680$), but combining it with 4-shot prompting
+($0.676$) adds little over prompting alone ($0.720$). We find that
+4-shot prompting already provides sufficient contextual grounding for
+the base model, making retrieval largely redundant in that regime. It appears that in some cases, the retrieved passages appear to take up space from more relevant
+parts of the current transcript rather than adding new information.
+For the fine-tuned model, both RAG ($0.752$) and the combined
+condition ($0.722$) fall below the zero-shot fine-tuned baseline
+($0.812$), which is consistent with the adapter having already
+internalized the relevant signal. Retrieved context here competes
+for prompt space more than it contributes.
+
+On the direction task results are near chance across all settings,
+which is consistent with our earlier finding that the predictive
+signal simply is not in the transcript text. The small variation
+across augmentation conditions is within the noise range for
+$n=197$ and does not warrant interpretation.
 
 \begin{table}[!ht]
 \centering
@@ -513,6 +539,10 @@ the most informative parts of the test transcript within a fixed
 context window. For direction, no condition rises meaningfully
 above chance, which says the bottleneck is signal in the input,
 not modeling choices.
+
+We were not able to finish running the full large-dataset augmentation
+experiments on OSC in time for submission; the corresponding entries
+in Table~\ref{tab:all-results} are left blank. We hypothesize that sparse retrieval on the large dataset would have had similar results as on the small dataset, but are unsure how the switch from sparse to dense retrieval would have impacted results. Any formal conclusions would require testing and evaluation.
 
 \subsection{Class imbalance and metric choice}
 
@@ -590,8 +620,10 @@ short-window market reactions from text alone.
 \section*{Author Contributions}
 
 \paragraph{Surya Suresh.}
-% TODO: fill in -- e.g., few-shot prompting design and analysis,
-% extractive sentence selection, prompting results.
+Built the previous sparse and current dense RAG pipeline, including FAISS index construction
+with BAAI/bge-small-en-v1.5 embeddings and the dynamic budgeting scheme for combining retrieval
+and few-shot prompting within the fixed context window. Ran all small-dataset RAG and prompting experiments and
+contributed to the corresponding sections of the report.
 
 \paragraph{Nikhil Kumar.}
 Built the large dataset, including the rate-limit-aware label
