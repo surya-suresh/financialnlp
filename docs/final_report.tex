@@ -299,19 +299,11 @@ few-shot variants that build on top of the fine-tuned model.
 \subsection{Few-shot prompting}
 \label{sec:prompt}
 
-\textit{[Section to be completed by teammate.]} The few-shot variant
-prepends $k$ labeled examples drawn chronologically from the training
-split before the test transcript. Per the team's design, $k=4$ shots
-are used, balanced across labels (2~positive, 2~negative), with
-150~tokens per shot and a 3072-token total prompt budget.
-Chain-of-thought reasoning was tested but did not yield reliable
-improvements in our setting and is excluded from the final pipeline,
-likely because the additional reasoning step disturbs the
-single-token answer format the adapter was trained on. Extractive
-sentence selection using a 24-keyword financial dictionary is used to
-densify each shot's transcript content. Final scoring uses the same
-softmax-over-target-pair procedure described in
-Section~\ref{sec:formulation}.
+The few-shot variant prepends $k=4$ labeled examples from the training split before the test transcript. Each example shows a short excerpt from a past earnings call followed by its known outcome, so the model sees what a beat, a miss, an up, and a down look like in practice before being asked to classify a new call. The system prompt names the task and constrains the output to the two allowed tokens, matching the format used in zero-shot evaluation.
+
+Earnings call transcripts are far too long to include verbatim in a demonstration. Instead of head-and-tail truncation, which would preserve boilerplate from the opening remarks, we use extractive sentence scoring. Each sentence is scored by counting how many of 24 financial keywords it contains. Keywords are matched longest-first and each matched span is blanked out before shorter keywords are checked, so a phrase like “earnings per share” is counted once rather than three times. Only sentences with at least one keyword hit are included. The highest-scoring sentences are greedily packed into a 150-token budget per shot and restored to their original document order so the excerpt reads coherently. This concentrates the demonstration content on sentences that discuss relevant information to the direction and surprise tasks.
+
+The full prompt is assembled as: system prompt, $k$ examples each with an excerpt and known answer, then the test excerpt ending with \texttt{Answer:}. Scoring is identical to the zero-shot procedure in Section~\ref{sec:formulation}: one forward pass, logits read at the final position, softmax over the two target token logits to get a probability for the positive class.
 
 \subsection{Retrieval-augmented generation}
 \label{sec:rag}
@@ -452,9 +444,11 @@ protocols differ.
 
 \subsection{Few-shot prompting}
 
-\textit{[Analysis to be completed by teammate.]} The 4-shot
-prompting results are presented in Table~\ref{tab:all-results} in
-the Discussion alongside the other augmentation conditions.
+On the surprise task, 4-shot prompting improves the base model from AUC 0.637 to 0.720, a gain of 0.083. The 4-shot CI \mbox{[0.57, 0.86]} sits above random chance, and its lower bound exceeds that of the zero-shot base CI \mbox{[0.49, 0.78]} which suggests that there is improvement on the test set of size n = 83. Providing the model with concrete examples of what beat and miss language looks like in practice appears to help it orient toward the relevant signal in the test transcript.
+
+For the fine-tuned model on surprise, prompting goes the other way: AUC drops from 0.812 to 0.748. The CIs \mbox{[0.62, 0.87]} and \mbox{[0.69, 0.92]} overlap substantially, so we cannot say with confidence that this is a real regression, but there is no evidence that prompting adds anything on top of fine-tuning. The adapter has already seen thousands of labeled calls and learned which language patterns correspond to each outcome. Prepending four short excerpts consumes token budget that would otherwise go to the test transcript signal in that regime.
+
+On the direction task, 4-shot prompting moves AUC from 0.493 to 0.520 for the base model and from 0.499 to 0.536 for the fine-tuned model. Both CIs include 0.50 pretty comfortably, so neither result is confidently above chance. This is consistent with the fine-tuning findings: the limitation on direction is that the transcript does not contain the information needed to predict short-window price movement. Providing labeled demonstrations does not change what information is available in the input, so the result stays near chance regardless of the prompting strategy.
 
 \subsection{Retrieval-augmented generation}
 
@@ -622,7 +616,7 @@ short-window market reactions from text alone.
 \paragraph{Surya Suresh.}
 Built the previous sparse and current dense RAG pipeline, including FAISS index construction
 with BAAI/bge-small-en-v1.5 embeddings and the dynamic budgeting scheme for combining retrieval
-and few-shot prompting within the fixed context window. Ran all small-dataset RAG and prompting experiments and
+and few-shot prompting within the fixed context window. Ran all small-dataset RAG and RAG + prompting experiments and
 contributed to the corresponding sections of the report.
 
 \paragraph{Nikhil Kumar.}
@@ -634,8 +628,7 @@ writing of the report, with primary responsibility for the
 fine-tuning section.
 
 \paragraph{Dheeraj Gosula.}
-% TODO: fill in -- e.g., retrieval-augmented generation pipeline,
-% sparse retrieval corpus, BM25 fallback, RAG results.
+Built the few-shot prompting pipeline, including the extractive sentence scoring method using a financial keyword dictionary, the class-balanced and temporally diverse shot selection strategy, and the token budget management scheme that ensures the answer token is always at the final position.
 
 \section*{Code}
 

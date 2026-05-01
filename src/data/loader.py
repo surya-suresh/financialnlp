@@ -338,3 +338,89 @@ def chronological_split(df: pd.DataFrame, train_ratio: float = 0.8):
     df = df.sort_values("date").reset_index(drop=True)
     split = int(len(df) * train_ratio)
     return df.iloc[:split].copy(), df.iloc[split:].copy()
+
+
+# ---------------------------------------------------------------------------
+# Non-transcript context block (for prompt augmentation)
+# ---------------------------------------------------------------------------
+
+def fetch_context_blocks_batch(rows: list[dict]) -> dict:
+    import yfinance as yf
+
+    tickers = {r["ticker"] for r in rows}
+    ticker_years = {(r["ticker"], r["date"][:4]) for r in rows}
+
+    ticker_cache: dict[str, dict] = {}
+    logger.info("Fetching context metadata for %d unique tickers ...", len(tickers))
+    for ticker in sorted(tickers):
+        t = yf.Ticker(ticker)
+        full_info = t.info
+        sector = full_info.get("sector") or full_info.get("industryDisp")
+
+        eps_history = []
+        ed = t.get_earnings_dates(limit=20)
+        if ed is not None and not ed.empty:
+            ed_clean = ed.dropna(subset=["Reported EPS"]).copy()
+            idx = pd.DatetimeIndex(ed_clean.index)
+            if idx.tz is not None:
+                idx = idx.tz_convert("UTC").tz_localize(None)
+            ed_clean.index = idx
+            ed_clean = ed_clean.sort_index(ascending=False)
+            eps_history = list(zip(ed_clean.index.tolist(), ed_clean["Reported EPS"].tolist()))
+
+        ticker_cache[ticker] = {"sector": sector, "eps_history": eps_history}
+
+    ytd_cache: dict = {}
+    logger.info("Fetching YTD price data for %d ticker-year pairs ...", len(ticker_years))
+    for ticker, year_str in sorted(ticker_years):
+        year_start = f"{year_str}-01-01"
+        year_end   = f"{int(year_str) + 1}-01-15"
+        hist = yf.download(ticker, start=year_start, end=year_end, progress=False, auto_adjust=True)
+        if isinstance(hist.columns, pd.MultiIndex):
+            hist.columns = hist.columns.get_level_values(0)
+        ytd_cache[(ticker, year_str)] = hist["Close"].dropna()
+
+    result: dict = {}
+    for row in rows:
+        ticker        = row["ticker"]
+        date_str      = row["date"][:10]
+        year_str      = date_str[:4]
+        call_ts       = pd.Timestamp(date_str)
+        consensus_eps = row.get("consensus_eps")
+
+        parts: list[str] = []
+        cache = ticker_cache.get(ticker, {})
+
+        # prior 4 quarters EPS (strictly before call date)
+        history = cache.get("eps_history", [])
+        prior = [(dt, eps) for dt, eps in history if pd.Timestamp(dt) < call_ts][:4]
+        if prior:
+            eps_strs = []
+            for dt, eps in prior:
+                ts = pd.Timestamp(dt)
+                q  = (ts.month - 1) // 3 + 1
+                eps_strs.append(f"Q{q} {ts.year}: ${float(eps):.2f}")
+            parts.append(f"- Prior 4 quarters EPS: {', '.join(eps_strs)}")
+
+        if consensus_eps is not None:
+            parts.append(f"- Analyst EPS consensus this quarter: ${float(consensus_eps):.2f}")
+
+        sector = cache.get("sector")
+        if sector:
+            parts.append(f"- Sector: {sector}")
+
+        # YTD stock performance (Jan 1 to call date)
+        price_series = ytd_cache.get((ticker, year_str))
+        if price_series is not None and len(price_series) >= 2:
+            prior_prices = price_series[price_series.index <= call_ts]
+            if len(prior_prices) >= 2:
+                ytd_ret = (float(prior_prices.iloc[-1]) - float(prior_prices.iloc[0])) \
+                          / float(prior_prices.iloc[0]) * 100
+                sign = "+" if ytd_ret >= 0 else ""
+                parts.append(f"- Stock performance YTD: {sign}{ytd_ret:.1f}%")
+
+        result[(ticker, date_str)] = "Context:\n" + "\n".join(parts) if parts else ""
+
+    logger.info("Context blocks assembled: %d / %d non-empty",
+                sum(1 for v in result.values() if v), len(result))
+    return result
